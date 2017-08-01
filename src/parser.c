@@ -2753,7 +2753,7 @@ void TY_(ParseRow)(TidyDocImpl* doc, Node *row, GetTokenMode ARG_UNUSED(mode))
                 lexer->excludeBlocks = exclude_state;
                 continue;
             }
-            else if (node->tag->model & CM_HEAD)
+            else if (node->tag && (node->tag->model & CM_HEAD))
             {
                 TY_(ReportError)(doc, row, node, TAG_NOT_ALLOWED_IN);
                 MoveToHead( doc, row, node);
@@ -3086,7 +3086,8 @@ void TY_(ParseTableTag)(TidyDocImpl* doc, Node *table, GetTokenMode ARG_UNUSED(m
                 lexer->exiled = no;
                 continue;
             }
-            else if (node->tag->model & CM_HEAD)
+            
+            else if (node->tag && (node->tag->model & CM_HEAD))
             {
                 MoveToHead(doc, table, node);
                 continue;
@@ -4946,6 +4947,7 @@ static void ParseXMLElement(TidyDocImpl* doc, Node *element, GetTokenMode mode)
 {
     Lexer* lexer = doc->lexer;
     Node *node;
+    if (!element) { return; }
 
     /* if node is pre or has xml:space="preserve" then do so */
 

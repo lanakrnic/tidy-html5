@@ -786,6 +786,11 @@ int TY_(ParseConfigFileEnc)( TidyDocImpl* doc, ctmbstr file, ctmbstr charenc )
     if ( fin == NULL || enc < 0 )
     {
         TY_(FileError)( doc, fname, TidyConfig, FILE_CANT_OPEN );
+        if (fin)
+        {
+            // coverity resource leak reported
+            fclose(fin);
+        }
         return -1;
     }
     else

@@ -75,10 +75,13 @@ int TY_(initFileSource)( TidyAllocator *allocator, TidyInputSource* inp, FILE* f
 void TY_(freeFileSource)( TidyInputSource* inp, Bool closeIt )
 {
     FileSource* fin = (FileSource*) inp->sourceData;
-    if ( closeIt && fin && fin->fp )
-      fclose( fin->fp );
-    tidyBufFree( &fin->unget );
-    TidyFree( fin->unget.allocator, fin );
+    if (fin)
+    {
+        if (closeIt && fin->fp)
+            fclose(fin->fp);
+        tidyBufFree(&fin->unget);
+        TidyFree(fin->unget.allocator, fin);
+    }
 }
 
 void TIDY_CALL TY_(filesink_putByte)( void* sinkData, byte bv )
