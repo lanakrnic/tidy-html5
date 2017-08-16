@@ -1349,6 +1349,8 @@ int         tidyDocSaveSink( TidyDocImpl* doc, TidyOutputSink* sink )
 
 int         tidyDocStatus( TidyDocImpl* doc )
 {
+    if (doc->recursion_limit_exceeded)
+        return 3;
     if ( doc->errors > 0 )
         return 2;
     if ( doc->warnings > 0 || doc->accessErrors > 0 )

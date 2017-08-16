@@ -14,7 +14,7 @@
 #include "forward.h"
 #include "attrdict.h"
 
-typedef void (Parser)( TidyDocImpl* doc, Node *node, GetTokenMode mode );
+typedef int (Parser)( TidyDocImpl* doc, Node *node, GetTokenMode mode, int recursion_depth );
 typedef void (CheckAttribs)( TidyDocImpl* doc, Node *node );
 
 /*

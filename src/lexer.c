@@ -2014,7 +2014,10 @@ Bool TY_(SetXHTMLDocType)( TidyDocImpl* doc )
     if (!doctype)
     {
         doctype = NewDocTypeNode(doc);
-        doctype->element = TY_(tmbstrdup)(doc->allocator, "html");
+        if (doctype)
+        {
+            doctype->element = TY_(tmbstrdup)(doc->allocator, "html");
+        }
     }
     else
     {

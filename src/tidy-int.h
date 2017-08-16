@@ -75,6 +75,7 @@ struct _TidyDocImpl
     uint                badLayout;   /* for bad style errors */
     uint                badChars;    /* for bad char encodings */
     uint                badForm;     /* bit field, for badly placed form tags, or other format errors */
+    Bool                recursion_limit_exceeded;
 
     Bool                HTML5Mode;   /* current mode is html5 */
     Bool                xmlDetected; /* true if XML was used/detected */

@@ -30,6 +30,8 @@
  */
 #define showingBodyOnly(doc) (cfgAutoBool(doc,TidyBodyOnly) == TidyYesState) ? yes : no
 
+#define MAX_RECURSION_DEPTH 2000
+#define MAX_RECURSION_ERR_CODE 1
 
 Bool TY_(CheckNodeIntegrity)(Node *node)
 {
@@ -743,12 +745,17 @@ static Bool InsertMisc(Node *element, Node *node)
 }
 
 
-static void ParseTag( TidyDocImpl* doc, Node *node, GetTokenMode mode )
+static int ParseTag( TidyDocImpl* doc, Node *node, GetTokenMode mode, int recursion_depth )
 {
+    if (recursion_depth > MAX_RECURSION_DEPTH)
+    {
+        doc->recursion_limit_exceeded = 1;
+        return MAX_RECURSION_ERR_CODE;
+    }
     Lexer* lexer = doc->lexer;
 
     if (node->tag == NULL) /* [i_a]2 prevent crash for active content (php, asp) docs */
-        return;
+        return 0;
 
     /*
        Fix by GLP 2000-12-21.  Need to reset insertspace if this 
@@ -758,20 +765,20 @@ static void ParseTag( TidyDocImpl* doc, Node *node, GetTokenMode mode )
     {
         lexer->waswhite = no;
         if (node->tag->parser == NULL)
-            return;
+            return 0;
     }
     else if (!(node->tag->model & CM_INLINE))
         lexer->insertspace = no;
 
     if (node->tag->parser == NULL)
-        return;
+        return 0;
 
     if (node->type == StartEndTag)
-        return;
+        return 0;
 
     lexer->parent = node; /* [i_a]2 added this - not sure why - CHECKME: */
 
-    (*node->tag->parser)( doc, node, mode );
+    return (*node->tag->parser)( doc, node, mode, recursion_depth + 1);
 }
 
 /*
@@ -799,8 +806,13 @@ static void InsertDocType( TidyDocImpl* doc, Node *element, Node *doctype )
  move node to the head, where element is used as starting
  point in hunt for head. normally called during parsing
 */
-static void MoveToHead( TidyDocImpl* doc, Node *element, Node *node )
+static int MoveToHead( TidyDocImpl* doc, Node *element, Node *node,  int recursion_depth)
 {
+    if (recursion_depth > MAX_RECURSION_DEPTH)
+    {
+        doc->recursion_limit_exceeded = 1;
+        return MAX_RECURSION_ERR_CODE;
+    }
     Node *head;
 
     TY_(RemoveNode)( node );  /* make sure that node is isolated */
@@ -813,15 +825,19 @@ static void MoveToHead( TidyDocImpl* doc, Node *element, Node *node )
         assert(head != NULL);
 
         TY_(InsertNodeAtEnd)(head, node);
-
+        int result;
         if ( node->tag->parser )
-            ParseTag( doc, node, IgnoreWhitespace );
+            if ((result = ParseTag(doc, node, IgnoreWhitespace, recursion_depth + 1)) != 0)
+            {
+                return result;
+            }
     }
     else
     {
         TY_(ReportError)(doc, element, node, DISCARDING_UNEXPECTED);
         TY_(FreeNode)( doc, node );
     }
+    return 0;
 }
 
 /* moves given node to end of body element */
@@ -853,8 +869,13 @@ static void AddClassNoIndent( TidyDocImpl* doc, Node *node )
    upon seeing the start tag, or by the
    parser when the start tag is inferred
 */
-void TY_(ParseBlock)( TidyDocImpl* doc, Node *element, GetTokenMode mode)
+int TY_(ParseBlock)( TidyDocImpl* doc, Node *element, GetTokenMode mode, int recursion_depth)
 {
+    if (recursion_depth > MAX_RECURSION_DEPTH)
+    {
+        doc->recursion_limit_exceeded = 1;
+        return MAX_RECURSION_ERR_CODE;
+    }
 #if !defined(NDEBUG) && defined(_MSC_VER)
     static int in_parse_block = 0;
     static int parse_block_cnt = 0;
@@ -875,7 +896,7 @@ void TY_(ParseBlock)( TidyDocImpl* doc, Node *element, GetTokenMode mode)
         in_parse_block--;
         SPRTF("Exit ParseBlockL 1 %d...\n",in_parse_block);
 #endif
-        return;
+        return 0;
     }
 
     if ( nodeIsFORM(element) && 
@@ -940,7 +961,7 @@ void TY_(ParseBlock)( TidyDocImpl* doc, Node *element, GetTokenMode mode)
             in_parse_block--;
             SPRTF("Exit ParseBlock 2 %d...\n",in_parse_block);
 #endif
-            return;
+            return 0;
         }
 
 #if OBSOLETE /* Issue #380 Kill this code! But leave in src, just in case! */
@@ -1042,7 +1063,7 @@ void TY_(ParseBlock)( TidyDocImpl* doc, Node *element, GetTokenMode mode)
                     in_parse_block--;
                     SPRTF("Exit ParseBlock 2 %d...\n",in_parse_block);
 #endif
-                    return;
+                    return 0;
                 }
             }
         }
@@ -1179,7 +1200,11 @@ void TY_(ParseBlock)( TidyDocImpl* doc, Node *element, GetTokenMode mode)
 
                 if ( TY_(nodeHasCM)(node, CM_HEAD) )
                 {
-                    MoveToHead( doc, element, node );
+                    int result;
+                    if ( (result = MoveToHead(doc, element, node, recursion_depth + 1)) != 0)
+                    {
+                        return result;
+                    }
                     continue;
                 }
 
@@ -1206,7 +1231,7 @@ void TY_(ParseBlock)( TidyDocImpl* doc, Node *element, GetTokenMode mode)
                     in_parse_block--;
                     SPRTF("Exit ParseBlock 3 %d...\n",in_parse_block);
 #endif
-                    return;
+                    return 0;
                 }
             }
             else if ( TY_(nodeHasCM)(node, CM_BLOCK) )
@@ -1226,14 +1251,18 @@ void TY_(ParseBlock)( TidyDocImpl* doc, Node *element, GetTokenMode mode)
                     in_parse_block--;
                     SPRTF("Exit ParseBlock 4 %d...\n",in_parse_block);
 #endif
-                    return;
+                    return 0;
                 }
             }
             else /* things like list items */
             {
                 if (node->tag->model & CM_HEAD)
                 {
-                    MoveToHead( doc, element, node );
+                    int result;
+                    if ((result = MoveToHead(doc, element, node, recursion_depth + 1)) != 0)
+                    {
+                        return result;
+                    }
                     continue;
                 }
 
@@ -1280,7 +1309,7 @@ void TY_(ParseBlock)( TidyDocImpl* doc, Node *element, GetTokenMode mode)
                         in_parse_block--;
                         SPRTF("Exit ParseBlock 5 %d...\n",in_parse_block);
 #endif
-                        return;
+                        return 0;
                     }
 
                     node = TY_(InferredTag)(doc, TidyTag_UL);
@@ -1295,7 +1324,7 @@ void TY_(ParseBlock)( TidyDocImpl* doc, Node *element, GetTokenMode mode)
                         in_parse_block--;
                         SPRTF("Exit ParseBlock 6 %d...\n",in_parse_block);
 #endif
-                        return;
+                        return 0;
                     }
 
                     node = TY_(InferredTag)(doc, TidyTag_DL);
@@ -1310,7 +1339,7 @@ void TY_(ParseBlock)( TidyDocImpl* doc, Node *element, GetTokenMode mode)
                         in_parse_block--;
                         SPRTF("Exit ParseBlock 7 %d...\n",in_parse_block);
 #endif
-                        return;
+                        return 0;
                     }
                     node = TY_(InferredTag)(doc, TidyTag_TABLE);
                 }
@@ -1325,7 +1354,7 @@ void TY_(ParseBlock)( TidyDocImpl* doc, Node *element, GetTokenMode mode)
                     in_parse_block--;
                     SPRTF("Exit ParseBlock 8 %d...\n",in_parse_block);
 #endif
-                    return;
+                    return 0;
 
                 }
                 else
@@ -1335,7 +1364,7 @@ void TY_(ParseBlock)( TidyDocImpl* doc, Node *element, GetTokenMode mode)
                     in_parse_block--;
                     SPRTF("Exit ParseBlock 9 %d...\n",in_parse_block);
 #endif
-                    return;
+                    return 0;
                 }
             }
         }
@@ -1372,7 +1401,7 @@ void TY_(ParseBlock)( TidyDocImpl* doc, Node *element, GetTokenMode mode)
             in_parse_block--;
             SPRTF("Exit ParseBlock 9b %d...\n",in_parse_block);
 #endif
-            return;
+            return 0;
         }
 
         /* parse known element */
@@ -1411,7 +1440,11 @@ void TY_(ParseBlock)( TidyDocImpl* doc, Node *element, GetTokenMode mode)
             /* Issue #212 - WHY is this hard coded to 'IgnoreWhitespace' while an 
                effort has been made above to set a 'MixedContent' mode in some cases?
                WHY IS THE 'mode' VARIABLE NOT USED HERE???? */
-            ParseTag( doc, node, IgnoreWhitespace /*MixedContent*/ );
+            int result;
+            if ((result = ParseTag(doc, node, IgnoreWhitespace /*MixedContent*/, recursion_depth + 1)) != 0)
+            {
+                return result;
+            }
             continue;
         }
 
@@ -1440,6 +1473,7 @@ void TY_(ParseBlock)( TidyDocImpl* doc, Node *element, GetTokenMode mode)
     in_parse_block--;
     SPRTF("Exit ParseBlock 10 %d...\n",in_parse_block);
 #endif
+    return 0;
 }
 
 /* [i_a] svg / math */
@@ -1509,8 +1543,13 @@ static Node *FindMatchingDescendant( Node *parent, Node *node, Node *marker_node
    Act as a generic XML (sub)tree parser: collect each node and add it to the DOM, without any further validation.
    TODO : add schema- or other-hierarchy-definition-based validation of the subtree here...
 */
-void TY_(ParseNamespace)(TidyDocImpl* doc, Node *basenode, GetTokenMode mode)
+int TY_(ParseNamespace)(TidyDocImpl* doc, Node *basenode, GetTokenMode mode, int recursion_depth)
 {
+    if (recursion_depth > MAX_RECURSION_DEPTH)
+    {
+        doc->recursion_limit_exceeded = 1;
+        return MAX_RECURSION_ERR_CODE;
+    }
     Lexer* lexer = doc->lexer;
     Node *node;
     Node *parent = basenode;
@@ -1593,7 +1632,7 @@ void TY_(ParseNamespace)(TidyDocImpl* doc, Node *basenode, GetTokenMode mode)
                 {
                     lexer->istackbase = istackbase;
                     assert(basenode->closed == yes);
-                    return;
+                    return 0;
                 }
             }
             else
@@ -1631,11 +1670,17 @@ void TY_(ParseNamespace)(TidyDocImpl* doc, Node *basenode, GetTokenMode mode)
     }
 
     TY_(ReportError)(doc, basenode->parent, basenode, MISSING_ENDTAG_FOR);
+    return 0;
 }
 
 
-void TY_(ParseInline)( TidyDocImpl* doc, Node *element, GetTokenMode mode )
+int  TY_(ParseInline)( TidyDocImpl* doc, Node *element, GetTokenMode mode, int recursion_depth)
 {
+    if (recursion_depth > MAX_RECURSION_DEPTH)
+    {
+        doc->recursion_limit_exceeded = 1;
+        return MAX_RECURSION_ERR_CODE;
+    }
 #if !defined(NDEBUG) && defined(_MSC_VER)
     static int in_parse_inline = 0;
 #endif
@@ -1651,7 +1696,7 @@ void TY_(ParseInline)( TidyDocImpl* doc, Node *element, GetTokenMode mode )
         in_parse_inline--;
         SPRTF("Exit ParseInline 1 %d...\n",in_parse_inline);
 #endif
-        return;
+        return 0;
     }
 
     /*
@@ -1733,7 +1778,7 @@ void TY_(ParseInline)( TidyDocImpl* doc, Node *element, GetTokenMode mode )
             in_parse_inline--;
             SPRTF("Exit ParseInline 2 %d...\n",in_parse_inline);
 #endif
-            return;
+            return 0;
         }
 
         /* <u>...<u>  map 2nd <u> to </u> if 1st is explicit */
@@ -1824,7 +1869,7 @@ void TY_(ParseInline)( TidyDocImpl* doc, Node *element, GetTokenMode mode )
             in_parse_inline--;
             SPRTF("Exit ParseInline 3 %d...\n",in_parse_inline);
 #endif
-            return;
+            return 0;
         }
 
         /* within <dt> or <pre> map <p> to <br> */
@@ -1851,7 +1896,11 @@ void TY_(ParseInline)( TidyDocImpl* doc, Node *element, GetTokenMode mode )
         {
             TY_(ConstrainVersion)( doc, ~VERS_HTML40_STRICT );
             TY_(InsertNodeAtEnd)(element, node);
-            (*node->tag->parser)( doc, node, mode );
+            int result;
+            if ((result = (*node->tag->parser)(doc, node, mode, recursion_depth + 1)) != 0)
+            {
+                return result;
+            }
             continue;
         }
 
@@ -1914,7 +1963,7 @@ void TY_(ParseInline)( TidyDocImpl* doc, Node *element, GetTokenMode mode )
                         in_parse_inline--;
                         SPRTF("Exit ParseInline 4 %d...\n",in_parse_inline);
 #endif
-                        return; /* close <i>, but will re-open it, after </b> */
+                        return 0; /* close <i>, but will re-open it, after </b> */
                     }
                 }
                 TY_(PopInline)( doc, element );
@@ -1938,7 +1987,7 @@ void TY_(ParseInline)( TidyDocImpl* doc, Node *element, GetTokenMode mode )
                     in_parse_inline--;
                     SPRTF("Exit ParseInline 5 %d...\n",in_parse_inline);
 #endif
-                    return;
+                    return 0;
                 }
 
                 /* if parent is <a> then discard unexpected inline end tag */
@@ -1955,7 +2004,7 @@ void TY_(ParseInline)( TidyDocImpl* doc, Node *element, GetTokenMode mode )
                 in_parse_inline--;
                 SPRTF("Exit ParseInline 6 %d...\n",in_parse_inline);
 #endif
-                return;
+                return 0;
             }
         }
 
@@ -1981,7 +2030,7 @@ void TY_(ParseInline)( TidyDocImpl* doc, Node *element, GetTokenMode mode )
             in_parse_inline--;
             SPRTF("Exit ParseInline 7 %d...\n",in_parse_inline);
 #endif
-            return;
+            return 0;
         }
 
         /*
@@ -2018,7 +2067,7 @@ void TY_(ParseInline)( TidyDocImpl* doc, Node *element, GetTokenMode mode )
             in_parse_inline--;
             SPRTF("Exit ParseInline 8 %d...\n",in_parse_inline);
 #endif
-            return;
+            return 0;
         }
 
         if (element->tag->model & CM_HEADING)
@@ -2144,7 +2193,7 @@ void TY_(ParseInline)( TidyDocImpl* doc, Node *element, GetTokenMode mode )
                     in_parse_inline--;
                     SPRTF("Exit ParseInline 9 %d...\n",in_parse_inline);
 #endif
-                    return;
+                    return 0;
                 }
             }
         }
@@ -2176,7 +2225,11 @@ void TY_(ParseInline)( TidyDocImpl* doc, Node *element, GetTokenMode mode )
 
             if (node->tag->model & CM_HEAD && !(node->tag->model & CM_BLOCK))
             {
-                MoveToHead(doc, element, node);
+                int result;
+                if ((result = MoveToHead(doc, element, node, recursion_depth + 1)) != 0)
+                {
+                    return result;
+                }
                 continue;
             }
 
@@ -2196,7 +2249,7 @@ void TY_(ParseInline)( TidyDocImpl* doc, Node *element, GetTokenMode mode )
                     in_parse_inline--;
                     SPRTF("Exit ParseInline 10 %d...\n",in_parse_inline);
 #endif
-                    return;
+                    return 0;
                 }
             }
 
@@ -2209,7 +2262,7 @@ void TY_(ParseInline)( TidyDocImpl* doc, Node *element, GetTokenMode mode )
             in_parse_inline--;
             SPRTF("Exit ParseInline 11 %d...\n",in_parse_inline);
 #endif
-            return;
+            return 0;
         }
 
         /* parse inline element */
@@ -2223,7 +2276,11 @@ void TY_(ParseInline)( TidyDocImpl* doc, Node *element, GetTokenMode mode )
                 TrimSpaces(doc, element);
             
             TY_(InsertNodeAtEnd)(element, node);
-            ParseTag(doc, node, mode);
+            int result;
+            if ((result = ParseTag(doc, node, mode, recursion_depth + 1)) != 0)
+            {
+                return result;
+            }
             continue;
         }
 
@@ -2240,10 +2297,16 @@ void TY_(ParseInline)( TidyDocImpl* doc, Node *element, GetTokenMode mode )
     in_parse_inline--;
     SPRTF("Exit ParseInline 12 %d...\n",in_parse_inline);
 #endif
+    return 0;
 }
 
-void TY_(ParseEmpty)(TidyDocImpl* doc, Node *element, GetTokenMode mode)
+int TY_(ParseEmpty)(TidyDocImpl* doc, Node *element, GetTokenMode mode, int recursion_depth)
 {
+    if (recursion_depth > MAX_RECURSION_DEPTH)
+    {
+        doc->recursion_limit_exceeded = 1;
+        return MAX_RECURSION_ERR_CODE;
+    }
     Lexer* lexer = doc->lexer;
     if ( lexer->isvoyager )
     {
@@ -2261,15 +2324,21 @@ void TY_(ParseEmpty)(TidyDocImpl* doc, Node *element, GetTokenMode mode)
             }
         }
     }
+    return 0;
 }
 
-void TY_(ParseDefList)(TidyDocImpl* doc, Node *list, GetTokenMode mode)
+int TY_(ParseDefList)(TidyDocImpl* doc, Node *list, GetTokenMode mode, int recursion_depth)
 {
+    if (recursion_depth > MAX_RECURSION_DEPTH)
+    {
+        doc->recursion_limit_exceeded = 1;
+        return MAX_RECURSION_ERR_CODE;
+    }
     Lexer* lexer = doc->lexer;
     Node *node, *parent;
 
     if (list->tag->model & CM_EMPTY)
-        return;
+        return 0;
 
     lexer->insert = NULL;  /* defer implicit inline start tags */
 
@@ -2279,7 +2348,7 @@ void TY_(ParseDefList)(TidyDocImpl* doc, Node *list, GetTokenMode mode)
         {
             TY_(FreeNode)( doc, node);
             list->closed = yes;
-            return;
+            return 0;
         }
 
         /* deal with comments etc. */
@@ -2331,7 +2400,7 @@ void TY_(ParseDefList)(TidyDocImpl* doc, Node *list, GetTokenMode mode)
                     TY_(ReportError)(doc, list, node, MISSING_ENDTAG_BEFORE);
 
                     TY_(UngetToken)( doc );
-                    return;
+                    return 0;
                 }
             }
             if (discardIt)
@@ -2368,7 +2437,11 @@ void TY_(ParseDefList)(TidyDocImpl* doc, Node *list, GetTokenMode mode)
 
             /* and parse contents of center */
             lexer->excludeBlocks = no;
-            ParseTag( doc, node, mode);
+            int result;
+            if ((result = ParseTag(doc, node, mode, recursion_depth + 1)) != 0)
+            {
+                return result;
+            }
             lexer->excludeBlocks = yes;
 
             /* now create a new dl element,
@@ -2390,12 +2463,12 @@ void TY_(ParseDefList)(TidyDocImpl* doc, Node *list, GetTokenMode mode)
             if (!(node->tag->model & (CM_BLOCK | CM_INLINE)))
             {
                 TY_(ReportError)(doc, list, node, TAG_NOT_ALLOWED_IN);
-                return;
+                return 0;
             }
 
             /* if DD appeared directly in BODY then exclude blocks */
             if (!(node->tag->model & CM_INLINE) && lexer->excludeBlocks)
-                return;
+                return 0;
 
             node = TY_(InferredTag)(doc, TidyTag_DD);
             TY_(ReportError)(doc, list, node, MISSING_STARTTAG);
@@ -2410,10 +2483,15 @@ void TY_(ParseDefList)(TidyDocImpl* doc, Node *list, GetTokenMode mode)
         
         /* node should be <DT> or <DD>*/
         TY_(InsertNodeAtEnd)(list, node);
-        ParseTag( doc, node, IgnoreWhitespace);
+        int result;
+        if ((result = ParseTag(doc, node, IgnoreWhitespace, recursion_depth + 1)) != 0)
+        {
+            return result;
+        }
     }
 
     TY_(ReportError)(doc, list, node, MISSING_ENDTAG_FOR);
+    return 0;
 }
 
 static Bool FindLastLI( Node *list, Node **lastli )
@@ -2427,8 +2505,13 @@ static Bool FindLastLI( Node *list, Node **lastli )
     return *lastli ? yes:no;
 }
 
-void TY_(ParseList)(TidyDocImpl* doc, Node *list, GetTokenMode ARG_UNUSED(mode))
+int TY_(ParseList)(TidyDocImpl* doc, Node *list, GetTokenMode ARG_UNUSED(mode), int recursion_depth)
 {
+    if (recursion_depth > MAX_RECURSION_DEPTH)
+    {
+        doc->recursion_limit_exceeded = 1;
+        return MAX_RECURSION_ERR_CODE;
+    }
 #if !defined(NDEBUG) && defined(_MSC_VER)
     static int in_parse_list = 0;
 #endif
@@ -2446,7 +2529,7 @@ void TY_(ParseList)(TidyDocImpl* doc, Node *list, GetTokenMode ARG_UNUSED(mode))
         in_parse_list--;
         SPRTF("Exit ParseList 1 %d... CM_EMPTY\n",in_parse_list);
 #endif
-        return;
+        return 0;
     }
     lexer->insert = NULL;  /* defer implicit inline start tags */
 
@@ -2460,7 +2543,7 @@ void TY_(ParseList)(TidyDocImpl* doc, Node *list, GetTokenMode ARG_UNUSED(mode))
             in_parse_list--;
             SPRTF("Exit ParseList 2 %d... Endtag\n",in_parse_list);
 #endif
-            return;
+            return 0;
         }
 
         /* deal with comments etc. */
@@ -2512,7 +2595,7 @@ void TY_(ParseList)(TidyDocImpl* doc, Node *list, GetTokenMode ARG_UNUSED(mode))
                     in_parse_list--;
                     SPRTF("Exit ParseList 3 %d... No End Tag\n",in_parse_list);
 #endif
-                    return;
+                    return 0;
                 }
             }
 
@@ -2539,7 +2622,7 @@ void TY_(ParseList)(TidyDocImpl* doc, Node *list, GetTokenMode ARG_UNUSED(mode))
                 in_parse_list--;
                 SPRTF("Exit ParseList 4 %d... No End Tag\n",in_parse_list);
 #endif
-                return;
+                return 0;
             }
             /* http://tidy.sf.net/issue/1316307 */
             /* In exiled mode, return so table processing can continue. */
@@ -2551,7 +2634,7 @@ void TY_(ParseList)(TidyDocImpl* doc, Node *list, GetTokenMode ARG_UNUSED(mode))
                 in_parse_list--;
                 SPRTF("Exit ParseList 5 %d... exiled\n",in_parse_list);
 #endif
-                return;
+                return 0;
             }
             /* http://tidy.sf.net/issue/836462
                If "list" is an unordered list, insert the next tag within 
@@ -2581,8 +2664,11 @@ void TY_(ParseList)(TidyDocImpl* doc, Node *list, GetTokenMode ARG_UNUSED(mode))
                 TY_(InsertNodeAtEnd)(list,node);
             }
         }
-
-        ParseTag( doc, node, IgnoreWhitespace);
+        int result;
+        if (( result = ParseTag(doc, node, IgnoreWhitespace, recursion_depth + 1)) != 0)
+        {
+            return result;
+        }
     }
 
     TY_(ReportError)(doc, list, node, MISSING_ENDTAG_FOR);
@@ -2590,6 +2676,7 @@ void TY_(ParseList)(TidyDocImpl* doc, Node *list, GetTokenMode ARG_UNUSED(mode))
     in_parse_list--;
     SPRTF("Exit ParseList 6 %d... missing end tag\n",in_parse_list);
 #endif
+    return 0;
 }
 
 /*
@@ -2632,14 +2719,19 @@ static void FixEmptyRow(TidyDocImpl* doc, Node *row)
     }
 }
 
-void TY_(ParseRow)(TidyDocImpl* doc, Node *row, GetTokenMode ARG_UNUSED(mode))
+int TY_(ParseRow)(TidyDocImpl* doc, Node *row, GetTokenMode ARG_UNUSED(mode), int recursion_depth)
 {
+    if (recursion_depth > MAX_RECURSION_DEPTH)
+    {
+        doc->recursion_limit_exceeded = 1;
+        return MAX_RECURSION_ERR_CODE;
+    }
     Lexer* lexer = doc->lexer;
     Node *node;
     Bool exclude_state;
 
     if (row->tag->model & CM_EMPTY)
-        return;
+        return 0;
 
     while ((node = TY_(GetToken)(doc, IgnoreWhitespace)) != NULL)
     {
@@ -2650,13 +2742,13 @@ void TY_(ParseRow)(TidyDocImpl* doc, Node *row, GetTokenMode ARG_UNUSED(mode))
                 TY_(FreeNode)( doc, node);
                 row->closed = yes;
                 FixEmptyRow( doc, row);
-                return;
+                return 0;
             }
 
             /* New row start implies end of current row */
             TY_(UngetToken)( doc );
             FixEmptyRow( doc, row);
-            return;
+            return 0;
         }
 
         /* 
@@ -2669,7 +2761,7 @@ void TY_(ParseRow)(TidyDocImpl* doc, Node *row, GetTokenMode ARG_UNUSED(mode))
                  && DescendantOf(row, TagId(node)) )
             {
                 TY_(UngetToken)( doc );
-                return;
+                return 0;
             }
 
             if ( nodeIsFORM(node) || TY_(nodeHasCM)(node, CM_BLOCK|CM_INLINE) )
@@ -2714,7 +2806,7 @@ void TY_(ParseRow)(TidyDocImpl* doc, Node *row, GetTokenMode ARG_UNUSED(mode))
         if ( TY_(nodeHasCM)(node, CM_ROWGRP) )
         {
             TY_(UngetToken)( doc );
-            return;
+            return 0;
         }
 
         if (node->type == EndTag)
@@ -2728,7 +2820,7 @@ void TY_(ParseRow)(TidyDocImpl* doc, Node *row, GetTokenMode ARG_UNUSED(mode))
           if text or inline or block move before table
           if head content move to head
         */
-
+        int result;
         if (node->type != EndTag)
         {
             if ( nodeIsFORM(node) )
@@ -2747,16 +2839,24 @@ void TY_(ParseRow)(TidyDocImpl* doc, Node *row, GetTokenMode ARG_UNUSED(mode))
                 lexer->excludeBlocks = no;
 
                 if (node->type != TextNode)
-                    ParseTag( doc, node, IgnoreWhitespace);
+                {
+                    if ((result = ParseTag(doc, node, IgnoreWhitespace, recursion_depth + 1)) != 0)
+                    {
+                        return result;
+                    }
+                }
 
                 lexer->exiled = no;
                 lexer->excludeBlocks = exclude_state;
                 continue;
             }
-            else if (node->tag->model & CM_HEAD)
+            else if (node->tag && (node->tag->model & CM_HEAD))
             {
                 TY_(ReportError)(doc, row, node, TAG_NOT_ALLOWED_IN);
-                MoveToHead( doc, row, node);
+                if ((result = MoveToHead(doc, row, node, recursion_depth + 1)) != 0)
+                {
+                    return result;
+                }
                 continue;
             }
         }
@@ -2772,7 +2872,10 @@ void TY_(ParseRow)(TidyDocImpl* doc, Node *row, GetTokenMode ARG_UNUSED(mode))
         TY_(InsertNodeAtEnd)(row, node);
         exclude_state = lexer->excludeBlocks;
         lexer->excludeBlocks = no;
-        ParseTag( doc, node, IgnoreWhitespace);
+        if (( result = ParseTag(doc, node, IgnoreWhitespace, recursion_depth + 1)) != 0)
+        {
+            return result;
+        }
         lexer->excludeBlocks = exclude_state;
 
         /* pop inline stack */
@@ -2780,16 +2883,21 @@ void TY_(ParseRow)(TidyDocImpl* doc, Node *row, GetTokenMode ARG_UNUSED(mode))
         while ( lexer->istacksize > lexer->istackbase )
             TY_(PopInline)( doc, NULL );
     }
-
+    return 0;
 }
 
-void TY_(ParseRowGroup)(TidyDocImpl* doc, Node *rowgroup, GetTokenMode ARG_UNUSED(mode))
+int TY_(ParseRowGroup)(TidyDocImpl* doc, Node *rowgroup, GetTokenMode ARG_UNUSED(mode), int recursion_depth)
 {
+    if (recursion_depth > MAX_RECURSION_DEPTH)
+    {
+        doc->recursion_limit_exceeded = 1;
+        return MAX_RECURSION_ERR_CODE;
+    }
     Lexer* lexer = doc->lexer;
     Node *node, *parent;
 
     if (rowgroup->tag->model & CM_EMPTY)
-        return;
+        return 0;
 
     while ((node = TY_(GetToken)(doc, IgnoreWhitespace)) != NULL)
     {
@@ -2799,18 +2907,18 @@ void TY_(ParseRowGroup)(TidyDocImpl* doc, Node *rowgroup, GetTokenMode ARG_UNUSE
             {
                 rowgroup->closed = yes;
                 TY_(FreeNode)( doc, node);
-                return;
+                return 0;
             }
 
             TY_(UngetToken)( doc );
-            return;
+            return 0;
         }
 
         /* if </table> infer end tag */
         if ( nodeIsTABLE(node) && node->type == EndTag )
         {
             TY_(UngetToken)( doc );
-            return;
+            return 0;
         }
 
         /* deal with comments etc. */
@@ -2830,7 +2938,7 @@ void TY_(ParseRowGroup)(TidyDocImpl* doc, Node *rowgroup, GetTokenMode ARG_UNUSE
           if text or inline or block move before table
           if head content move to head
         */
-
+        int result;
         if (node->type != EndTag)
         {
             if ( nodeIsTD(node) || nodeIsTH(node) )
@@ -2847,7 +2955,12 @@ void TY_(ParseRowGroup)(TidyDocImpl* doc, Node *rowgroup, GetTokenMode ARG_UNUSE
                 lexer->exiled = yes;
 
                 if (node->type != TextNode)
-                    ParseTag(doc, node, IgnoreWhitespace);
+                {
+                    if ((result = ParseTag(doc, node, IgnoreWhitespace, recursion_depth + 1))!=0 )
+                    {
+                        return result;
+                    }
+                }
 
                 lexer->exiled = no;
                 continue;
@@ -2855,7 +2968,10 @@ void TY_(ParseRowGroup)(TidyDocImpl* doc, Node *rowgroup, GetTokenMode ARG_UNUSE
             else if (node->tag->model & CM_HEAD)
             {
                 TY_(ReportError)(doc, rowgroup, node, TAG_NOT_ALLOWED_IN);
-                MoveToHead(doc, rowgroup, node);
+                if ((result = MoveToHead(doc, rowgroup, node, recursion_depth + 1)) != 0)
+                {
+                    return result;
+                }
                 continue;
             }
         }
@@ -2890,7 +3006,7 @@ void TY_(ParseRowGroup)(TidyDocImpl* doc, Node *rowgroup, GetTokenMode ARG_UNUSE
                 if (node->tag == parent->tag)
                 {
                     TY_(UngetToken)( doc );
-                    return;
+                    return 0;
                 }
             }
         }
@@ -2904,7 +3020,7 @@ void TY_(ParseRowGroup)(TidyDocImpl* doc, Node *rowgroup, GetTokenMode ARG_UNUSE
             if (node->type != EndTag)
             {
                 TY_(UngetToken)( doc );
-                return;
+                return 0;
             }
         }
 
@@ -2924,17 +3040,25 @@ void TY_(ParseRowGroup)(TidyDocImpl* doc, Node *rowgroup, GetTokenMode ARG_UNUSE
 
        /* node should be <TR> */
         TY_(InsertNodeAtEnd)(rowgroup, node);
-        ParseTag(doc, node, IgnoreWhitespace);
+        if ((result = ParseTag(doc, node, IgnoreWhitespace, recursion_depth + 1))!= 0)
+        {
+            return result;
+        }
     }
-
+    return 0;
 }
 
-void TY_(ParseColGroup)(TidyDocImpl* doc, Node *colgroup, GetTokenMode ARG_UNUSED(mode))
+int TY_(ParseColGroup)(TidyDocImpl* doc, Node *colgroup, GetTokenMode ARG_UNUSED(mode), int recursion_depth)
 {
+    if (recursion_depth > MAX_RECURSION_DEPTH)
+    {
+        doc->recursion_limit_exceeded = 1;
+        return MAX_RECURSION_ERR_CODE;
+    }
     Node *node, *parent;
 
     if (colgroup->tag->model & CM_EMPTY)
-        return;
+        return 0;
 
     while ((node = TY_(GetToken)(doc, IgnoreWhitespace)) != NULL)
     {
@@ -2942,7 +3066,7 @@ void TY_(ParseColGroup)(TidyDocImpl* doc, Node *colgroup, GetTokenMode ARG_UNUSE
         {
             TY_(FreeNode)( doc, node);
             colgroup->closed = yes;
-            return;
+            return 0;
         }
 
         /* 
@@ -2966,7 +3090,7 @@ void TY_(ParseColGroup)(TidyDocImpl* doc, Node *colgroup, GetTokenMode ARG_UNUSE
                 if (node->tag == parent->tag)
                 {
                     TY_(UngetToken)( doc );
-                    return;
+                    return 0;
                 }
             }
         }
@@ -2974,7 +3098,7 @@ void TY_(ParseColGroup)(TidyDocImpl* doc, Node *colgroup, GetTokenMode ARG_UNUSE
         if (TY_(nodeIsText)(node))
         {
             TY_(UngetToken)( doc );
-            return;
+            return 0;
         }
 
         /* deal with comments etc. */
@@ -2992,7 +3116,7 @@ void TY_(ParseColGroup)(TidyDocImpl* doc, Node *colgroup, GetTokenMode ARG_UNUSE
         if ( !nodeIsCOL(node) )
         {
             TY_(UngetToken)( doc );
-            return;
+            return 0;
         }
 
         if (node->type == EndTag)
@@ -3004,12 +3128,22 @@ void TY_(ParseColGroup)(TidyDocImpl* doc, Node *colgroup, GetTokenMode ARG_UNUSE
         
         /* node should be <COL> */
         TY_(InsertNodeAtEnd)(colgroup, node);
-        ParseTag(doc, node, IgnoreWhitespace);
+        int result;
+        if (( result = ParseTag(doc, node, IgnoreWhitespace, recursion_depth + 1)) != 0)
+        {
+            return result;
+        }
     }
+    return 0;
 }
 
-void TY_(ParseTableTag)(TidyDocImpl* doc, Node *table, GetTokenMode ARG_UNUSED(mode))
+int TY_(ParseTableTag)(TidyDocImpl* doc, Node *table, GetTokenMode ARG_UNUSED(mode), int recursion_depth)
 {
+    if (recursion_depth > MAX_RECURSION_DEPTH)
+    {
+        doc->recursion_limit_exceeded = 1;
+        return MAX_RECURSION_ERR_CODE;
+    }
 #if !defined(NDEBUG) && defined(_MSC_VER)
     static int in_parse_table = 0;
 #endif
@@ -3049,7 +3183,7 @@ void TY_(ParseTableTag)(TidyDocImpl* doc, Node *table, GetTokenMode ARG_UNUSED(m
             in_parse_table--;
             SPRTF("Exit ParseTableTag 1 %d... EndTag\n",in_parse_table);
 #endif
-            return;
+            return 0;
         }
 
         /* deal with comments etc. */
@@ -3065,7 +3199,7 @@ void TY_(ParseTableTag)(TidyDocImpl* doc, Node *table, GetTokenMode ARG_UNUSED(m
         }
 
         /* if TD or TH or text or inline or block then infer <TR> */
-
+        int result;
         if (node->type != EndTag)
         {
             if ( nodeIsTD(node) || nodeIsTH(node) || nodeIsTABLE(node) )
@@ -3080,15 +3214,24 @@ void TY_(ParseTableTag)(TidyDocImpl* doc, Node *table, GetTokenMode ARG_UNUSED(m
                 TY_(ReportError)(doc, table, node, TAG_NOT_ALLOWED_IN);
                 lexer->exiled = yes;
 
-                if (node->type != TextNode) 
-                    ParseTag(doc, node, IgnoreWhitespace);
+                if (node->type != TextNode)
+                {
+                    if ((result = ParseTag(doc, node, IgnoreWhitespace, recursion_depth + 1)) != 0)
+                    {
+                        return result;
+                    }
+                }
 
                 lexer->exiled = no;
                 continue;
             }
-            else if (node->tag->model & CM_HEAD)
+            
+            else if (node->tag && (node->tag->model & CM_HEAD))
             {
-                MoveToHead(doc, table, node);
+                if ((result = MoveToHead(doc, table, node, recursion_depth + 1))!= 0)
+                {
+                    return result;
+                }
                 continue;
             }
         }
@@ -3129,7 +3272,7 @@ void TY_(ParseTableTag)(TidyDocImpl* doc, Node *table, GetTokenMode ARG_UNUSED(m
                     in_parse_table--;
                     SPRTF("Exit ParseTableTag 2 %d... missing EndTag\n",in_parse_table);
 #endif
-                    return;
+                    return 0;
                 }
             }
         }
@@ -3143,13 +3286,16 @@ void TY_(ParseTableTag)(TidyDocImpl* doc, Node *table, GetTokenMode ARG_UNUSED(m
             in_parse_table--;
             SPRTF("Exit ParseTableTag 3 %d... CM_TABLE\n",in_parse_table);
 #endif
-            return;
+            return 0;
         }
 
         if (TY_(nodeIsElement)(node))
         {
             TY_(InsertNodeAtEnd)(table, node);
-            ParseTag(doc, node, IgnoreWhitespace);
+            if ((result = ParseTag(doc, node, IgnoreWhitespace, recursion_depth + 1)) != 0)
+            {
+                return result;
+            }
             continue;
         }
 
@@ -3164,6 +3310,7 @@ void TY_(ParseTableTag)(TidyDocImpl* doc, Node *table, GetTokenMode ARG_UNUSED(m
     in_parse_table--;
     SPRTF("Exit ParseTableTag 4 %d... missing end\n",in_parse_table);
 #endif
+    return 0;
 }
 
 /* acceptable content for pre elements */
@@ -3181,12 +3328,17 @@ static Bool PreContent( TidyDocImpl* ARG_UNUSED(doc), Node* node )
     return yes;
 }
 
-void TY_(ParsePre)( TidyDocImpl* doc, Node *pre, GetTokenMode ARG_UNUSED(mode) )
+int TY_(ParsePre)( TidyDocImpl* doc, Node *pre, GetTokenMode ARG_UNUSED(mode), int recursion_depth)
 {
+    if (recursion_depth > MAX_RECURSION_DEPTH)
+    {
+        doc->recursion_limit_exceeded = 1;
+        return MAX_RECURSION_ERR_CODE;
+    }
     Node *node;
 
     if (pre->tag->model & CM_EMPTY)
-        return;
+        return 0;
 
     TY_(InlineDup)( doc, NULL ); /* tell lexer to insert inlines if needed */
 
@@ -3212,7 +3364,7 @@ void TY_(ParsePre)( TidyDocImpl* doc, Node *pre, GetTokenMode ARG_UNUSED(mode) )
             }
             pre->closed = yes;
             TrimSpaces(doc, pre);
-            return;
+            return 0;
         }
 
         if (TY_(nodeIsText)(node))
@@ -3233,6 +3385,7 @@ void TY_(ParsePre)( TidyDocImpl* doc, Node *pre, GetTokenMode ARG_UNUSED(mode) )
         }
 
         /* strip unexpected tags */
+        int result;
         if ( !PreContent(doc, node) )
         {
             Node *newnode;
@@ -3246,7 +3399,7 @@ void TY_(ParsePre)( TidyDocImpl* doc, Node *pre, GetTokenMode ARG_UNUSED(mode) )
                {
                   TY_(UngetToken)(doc);
                   TrimSpaces(doc, pre);
-                  return;
+                  return 0;
                }
 
                TY_(ReportError)(doc, pre, node, DISCARDING_UNEXPECTED);
@@ -3262,7 +3415,7 @@ void TY_(ParsePre)( TidyDocImpl* doc, Node *pre, GetTokenMode ARG_UNUSED(mode) )
                     TY_(ReportError)(doc, pre, node, MISSING_ENDTAG_BEFORE);
 
                 TY_(UngetToken)(doc);
-                return;
+                return 0;
             }
 
             /*
@@ -3304,7 +3457,10 @@ void TY_(ParsePre)( TidyDocImpl* doc, Node *pre, GetTokenMode ARG_UNUSED(mode) )
             */
             TY_(InsertNodeAfterElement)(pre, node);
             TY_(ReportError)(doc, pre, node, MISSING_ENDTAG_BEFORE);
-            ParseTag(doc, node, IgnoreWhitespace);
+            if ((result = ParseTag(doc, node, IgnoreWhitespace, recursion_depth + 1)) != 0)
+            {
+                return result;
+            }
 
             newnode = TY_(InferredTag)(doc, TidyTag_PRE);
             TY_(ReportError)(doc, pre, newnode, INSERTING_TAG);
@@ -3343,7 +3499,10 @@ void TY_(ParsePre)( TidyDocImpl* doc, Node *pre, GetTokenMode ARG_UNUSED(mode) )
                 TrimSpaces(doc, pre);
             
             TY_(InsertNodeAtEnd)(pre, node);
-            ParseTag(doc, node, Preformatted);
+            if ((result = ParseTag(doc, node, Preformatted, recursion_depth + 1))!= 0)
+            {
+                return result;
+            }
             continue;
         }
 
@@ -3353,10 +3512,16 @@ void TY_(ParsePre)( TidyDocImpl* doc, Node *pre, GetTokenMode ARG_UNUSED(mode) )
     }
 
     TY_(ReportError)(doc, pre, node, MISSING_ENDTAG_FOR);
+    return 0;
 }
 
-void TY_(ParseOptGroup)(TidyDocImpl* doc, Node *field, GetTokenMode ARG_UNUSED(mode))
+int TY_(ParseOptGroup)(TidyDocImpl* doc, Node *field, GetTokenMode ARG_UNUSED(mode), int recursion_depth)
 {
+    if (recursion_depth > MAX_RECURSION_DEPTH)
+    {
+        doc->recursion_limit_exceeded = 1;
+        return MAX_RECURSION_ERR_CODE;
+    }
     Lexer* lexer = doc->lexer;
     Node *node;
 
@@ -3369,7 +3534,7 @@ void TY_(ParseOptGroup)(TidyDocImpl* doc, Node *field, GetTokenMode ARG_UNUSED(m
             TY_(FreeNode)( doc, node);
             field->closed = yes;
             TrimSpaces(doc, field);
-            return;
+            return 0;
         }
 
         /* deal with comments etc. */
@@ -3383,7 +3548,11 @@ void TY_(ParseOptGroup)(TidyDocImpl* doc, Node *field, GetTokenMode ARG_UNUSED(m
                 TY_(ReportError)(doc, field, node, CANT_BE_NESTED);
 
             TY_(InsertNodeAtEnd)(field, node);
-            ParseTag(doc, node, MixedContent);
+            int result;
+            if ((result = ParseTag(doc, node, MixedContent, recursion_depth + 1)) != 0)
+            {
+                return result;
+            }
             continue;
         }
 
@@ -3391,11 +3560,17 @@ void TY_(ParseOptGroup)(TidyDocImpl* doc, Node *field, GetTokenMode ARG_UNUSED(m
         TY_(ReportError)(doc, field, node, DISCARDING_UNEXPECTED );
         TY_(FreeNode)( doc, node);
     }
+    return 0;
 }
 
 
-void TY_(ParseSelect)(TidyDocImpl* doc, Node *field, GetTokenMode ARG_UNUSED(mode))
+int TY_(ParseSelect)(TidyDocImpl* doc, Node *field, GetTokenMode ARG_UNUSED(mode), int recursion_depth)
 {
+    if (recursion_depth > MAX_RECURSION_DEPTH)
+    {
+        doc->recursion_limit_exceeded = 1;
+        return MAX_RECURSION_ERR_CODE;
+    }
 #if !defined(NDEBUG) && defined(_MSC_VER)
     static int in_parse_select = 0;
 #endif
@@ -3419,7 +3594,7 @@ void TY_(ParseSelect)(TidyDocImpl* doc, Node *field, GetTokenMode ARG_UNUSED(mod
             in_parse_select--;
             SPRTF("Exit ParseSelect 1 %d...\n",in_parse_select);
 #endif
-            return;
+            return 0;
         }
 
         /* deal with comments etc. */
@@ -3434,7 +3609,11 @@ void TY_(ParseSelect)(TidyDocImpl* doc, Node *field, GetTokenMode ARG_UNUSED(mod
            )
         {
             TY_(InsertNodeAtEnd)(field, node);
-            ParseTag(doc, node, IgnoreWhitespace);
+            int result;
+            if ((result = ParseTag(doc, node, IgnoreWhitespace, recursion_depth + 1)) != 0)
+            {
+                return result;
+            }
             continue;
         }
 
@@ -3448,11 +3627,17 @@ void TY_(ParseSelect)(TidyDocImpl* doc, Node *field, GetTokenMode ARG_UNUSED(mod
     in_parse_select--;
     SPRTF("Exit ParseSelect 2 %d...\n",in_parse_select);
 #endif
+    return 0;
 }
 
 /* HTML5 */
-void TY_(ParseDatalist)(TidyDocImpl* doc, Node *field, GetTokenMode ARG_UNUSED(mode))
+int TY_(ParseDatalist)(TidyDocImpl* doc, Node *field, GetTokenMode ARG_UNUSED(mode), int recursion_depth)
 {
+    if (recursion_depth > MAX_RECURSION_DEPTH)
+    {
+        doc->recursion_limit_exceeded = 1;
+        return MAX_RECURSION_ERR_CODE;
+    }
 #if !defined(NDEBUG) && defined(_MSC_VER)
     static int in_parse_datalist = 0;
 #endif
@@ -3476,7 +3661,7 @@ void TY_(ParseDatalist)(TidyDocImpl* doc, Node *field, GetTokenMode ARG_UNUSED(m
             in_parse_datalist--;
             SPRTF("Exit ParseDatalist 1 %d...\n",in_parse_datalist);
 #endif
-            return;
+            return 0;
         }
 
         /* deal with comments etc. */
@@ -3491,7 +3676,11 @@ void TY_(ParseDatalist)(TidyDocImpl* doc, Node *field, GetTokenMode ARG_UNUSED(m
            )
         {
             TY_(InsertNodeAtEnd)(field, node);
-            ParseTag(doc, node, IgnoreWhitespace);
+            int result;
+            if ((result = ParseTag(doc, node, IgnoreWhitespace, recursion_depth + 1)) != 0)
+            {
+                return result;
+            }
             continue;
         }
 
@@ -3505,13 +3694,19 @@ void TY_(ParseDatalist)(TidyDocImpl* doc, Node *field, GetTokenMode ARG_UNUSED(m
     in_parse_datalist--;
     SPRTF("Exit ParseDatalist 2 %d...\n",in_parse_datalist);
 #endif
+    return 0;
 }
 
 
 
 
-void TY_(ParseText)(TidyDocImpl* doc, Node *field, GetTokenMode mode)
+int TY_(ParseText)(TidyDocImpl* doc, Node *field, GetTokenMode mode, int recursion_depth)
 {
+    if (recursion_depth > MAX_RECURSION_DEPTH)
+    {
+        doc->recursion_limit_exceeded = 1;
+        return MAX_RECURSION_ERR_CODE;
+    }
     Lexer* lexer = doc->lexer;
     Node *node;
 
@@ -3529,7 +3724,7 @@ void TY_(ParseText)(TidyDocImpl* doc, Node *field, GetTokenMode mode)
             TY_(FreeNode)( doc, node);
             field->closed = yes;
             TrimSpaces(doc, field);
-            return;
+            return 0;
         }
 
         /* deal with comments etc. */
@@ -3570,16 +3765,22 @@ void TY_(ParseText)(TidyDocImpl* doc, Node *field, GetTokenMode mode)
 
         TY_(UngetToken)( doc );
         TrimSpaces(doc, field);
-        return;
+        return 0;
     }
 
     if (!(field->tag->model & CM_OPT))
         TY_(ReportError)(doc, field, node, MISSING_ENDTAG_FOR);
+    return 0;
 }
 
 
-void TY_(ParseTitle)(TidyDocImpl* doc, Node *title, GetTokenMode ARG_UNUSED(mode))
+int TY_(ParseTitle)(TidyDocImpl* doc, Node *title, GetTokenMode ARG_UNUSED(mode), int recursion_depth)
 {
+    if (recursion_depth > MAX_RECURSION_DEPTH)
+    {
+        doc->recursion_limit_exceeded = 1;
+        return MAX_RECURSION_ERR_CODE;
+    }
     Node *node;
     while ((node = TY_(GetToken)(doc, MixedContent)) != NULL)
     {
@@ -3596,7 +3797,7 @@ void TY_(ParseTitle)(TidyDocImpl* doc, Node *title, GetTokenMode ARG_UNUSED(mode
             TY_(FreeNode)( doc, node);
             title->closed = yes;
             TrimSpaces(doc, title);
-            return;
+            return 0;
         }
 
         if (TY_(nodeIsText)(node))
@@ -3631,10 +3832,11 @@ void TY_(ParseTitle)(TidyDocImpl* doc, Node *title, GetTokenMode ARG_UNUSED(mode
         TY_(ReportError)(doc, title, node, MISSING_ENDTAG_BEFORE);
         TY_(UngetToken)( doc );
         TrimSpaces(doc, title);
-        return;
+        return 0;
     }
 
     TY_(ReportError)(doc, title, node, MISSING_ENDTAG_FOR);
+    return 0;
 }
 
 /*
@@ -3644,8 +3846,13 @@ void TY_(ParseTitle)(TidyDocImpl* doc, Node *title, GetTokenMode ARG_UNUSED(mode
   < + letter,  < + !, < + ?  or  < + / + letter
 */
 
-void TY_(ParseScript)(TidyDocImpl* doc, Node *script, GetTokenMode ARG_UNUSED(mode))
+int TY_(ParseScript)(TidyDocImpl* doc, Node *script, GetTokenMode ARG_UNUSED(mode), int recursion_depth)
 {
+    if (recursion_depth > MAX_RECURSION_DEPTH)
+    {
+        doc->recursion_limit_exceeded = 1;
+        return MAX_RECURSION_ERR_CODE;
+    }
     Node *node;
     
     doc->lexer->parent = script;
@@ -3660,7 +3867,7 @@ void TY_(ParseScript)(TidyDocImpl* doc, Node *script, GetTokenMode ARG_UNUSED(mo
     {
         /* handle e.g. a document like "<script>" */
         TY_(ReportError)(doc, script, NULL, MISSING_ENDTAG_FOR);
-        return;
+        return 0;
     }
 
     node = TY_(GetToken)(doc, IgnoreWhitespace);
@@ -3677,6 +3884,7 @@ void TY_(ParseScript)(TidyDocImpl* doc, Node *script, GetTokenMode ARG_UNUSED(mo
     {
         TY_(FreeNode)(doc, node);
     }
+    return 0;
 }
 
 Bool TY_(IsJavaScript)(Node *node)
@@ -3700,8 +3908,13 @@ Bool TY_(IsJavaScript)(Node *node)
     return result;
 }
 
-void TY_(ParseHead)(TidyDocImpl* doc, Node *head, GetTokenMode ARG_UNUSED(mode))
+int TY_(ParseHead)(TidyDocImpl* doc, Node *head, GetTokenMode ARG_UNUSED(mode), int recursion_depth)
 {
+    if (recursion_depth > MAX_RECURSION_DEPTH)
+    {
+        doc->recursion_limit_exceeded = 1;
+        return MAX_RECURSION_ERR_CODE;
+    }
     Lexer* lexer = doc->lexer;
     Node *node;
     int HasTitle = 0;
@@ -3848,7 +4061,11 @@ void TY_(ParseHead)(TidyDocImpl* doc, Node *head, GetTokenMode ARG_UNUSED(mode))
 #endif /* AUTO_INPUT_ENCODING */
 
             TY_(InsertNodeAtEnd)(head, node);
-            ParseTag(doc, node, IgnoreWhitespace);
+            int result;
+            if (( result = ParseTag(doc, node, IgnoreWhitespace, recursion_depth + 1)) != 0)
+            {
+                return result;
+            }
             continue;
         }
 
@@ -3859,6 +4076,7 @@ void TY_(ParseHead)(TidyDocImpl* doc, Node *head, GetTokenMode ARG_UNUSED(mode))
 #if !defined(NDEBUG) && defined(_MSC_VER)
     SPRTF("Exit ParseHead 1...\n");
 #endif
+    return 0;
 }
 
 /*\ 
@@ -3902,7 +4120,7 @@ Bool TY_(FindNodeById)( TidyDocImpl* doc, TidyTagId tid )
 }
 
 
-void TY_(ParseBody)(TidyDocImpl* doc, Node *body, GetTokenMode mode)
+int TY_(ParseBody)(TidyDocImpl* doc, Node *body, GetTokenMode mode, int recursion_depth)
 {
     Lexer* lexer = doc->lexer;
     Node *node;
@@ -3965,7 +4183,11 @@ void TY_(ParseBody)(TidyDocImpl* doc, Node *body, GetTokenMode mode)
             if (node->type == StartTag)
             {
                 TY_(InsertNodeAtEnd)(body, node);
-                TY_(ParseBlock)(doc, node, mode);
+                int result;
+                if (result = TY_(ParseBlock)(doc, node, mode, recursion_depth + 1) != 0)
+                {
+                    return result;
+                }
                 continue;
             }
 
@@ -4075,7 +4297,11 @@ void TY_(ParseBody)(TidyDocImpl* doc, Node *body, GetTokenMode mode)
 
             if (node->tag->model & CM_HEAD)
             {
-                MoveToHead(doc, body, node);
+                int result;
+                if (( result = MoveToHead(doc, body, node, recursion_depth + 1)) != 0)
+                {
+                    return result;
+                }
                 continue;
             }
 
@@ -4112,7 +4338,7 @@ void TY_(ParseBody)(TidyDocImpl* doc, Node *body, GetTokenMode mode)
                 if ( !TY_(nodeHasCM)(node, CM_ROW | CM_FIELD) )
                 {
                     TY_(UngetToken)( doc );
-                    return;
+                    return 0;
                 }
 
                 /* ignore </td> </th> <option> etc. */
@@ -4186,7 +4412,11 @@ void TY_(ParseBody)(TidyDocImpl* doc, Node *body, GetTokenMode mode)
                 TY_(ReportError)(doc, body, node, INSERTING_TAG);
 
             TY_(InsertNodeAtEnd)(body, node);
-            ParseTag(doc, node, mode);
+            int result;
+            if ((result = ParseTag(doc, node, mode, recursion_depth + 1)) != 0)
+            {
+                return result;
+            }
             continue;
         }
 
@@ -4197,10 +4427,16 @@ void TY_(ParseBody)(TidyDocImpl* doc, Node *body, GetTokenMode mode)
 #if !defined(NDEBUG) && defined(_MSC_VER)
     SPRTF("Exit ParseBody 1...\n");
 #endif
+    return 0;
 }
 
-void TY_(ParseNoFrames)(TidyDocImpl* doc, Node *noframes, GetTokenMode mode)
+int TY_(ParseNoFrames)(TidyDocImpl* doc, Node *noframes, GetTokenMode mode, int recursion_depth)
 {
+    if (recursion_depth > MAX_RECURSION_DEPTH)
+    {
+        doc->recursion_limit_exceeded = 1;
+        return MAX_RECURSION_ERR_CODE;
+    }
     Lexer* lexer = doc->lexer;
     Node *node;
 
@@ -4217,7 +4453,7 @@ void TY_(ParseNoFrames)(TidyDocImpl* doc, Node *noframes, GetTokenMode mode)
             TY_(FreeNode)( doc, node);
             noframes->closed = yes;
             TrimSpaces(doc, noframes);
-            return;
+            return 0;
         }
 
         if ( nodeIsFRAME(node) || nodeIsFRAMESET(node) )
@@ -4233,7 +4469,7 @@ void TY_(ParseNoFrames)(TidyDocImpl* doc, Node *noframes, GetTokenMode mode)
                 TY_(ReportError)(doc, noframes, node, MISSING_ENDTAG_BEFORE);
                 TY_(UngetToken)( doc );
             }
-            return;
+            return 0;
         }
 
         if ( nodeIsHTML(node) )
@@ -4248,12 +4484,15 @@ void TY_(ParseNoFrames)(TidyDocImpl* doc, Node *noframes, GetTokenMode mode)
         /* deal with comments etc. */
         if (InsertMisc(noframes, node))
             continue;
-
+        int result;
         if ( nodeIsBODY(node) && node->type == StartTag )
         {
             Bool seen_body = lexer->seenEndBody;
             TY_(InsertNodeAtEnd)(noframes, node);
-            ParseTag(doc, node, IgnoreWhitespace /*MixedContent*/);
+            if ((result = ParseTag(doc, node, IgnoreWhitespace, recursion_depth + 1)) != 0)
+            {
+                return result;
+            }
 
             /* fix for bug http://tidy.sf.net/bug/887259 */
             if (seen_body && TY_(FindBody)(doc) != node)
@@ -4293,7 +4532,10 @@ void TY_(ParseNoFrames)(TidyDocImpl* doc, Node *noframes, GetTokenMode mode)
                 TY_(InsertNodeAtEnd)( noframes, node );
             }
 
-            ParseTag( doc, node, IgnoreWhitespace /*MixedContent*/ );
+            if ((result = ParseTag(doc, node, IgnoreWhitespace, recursion_depth + 1)) != 0)
+            {
+                return result;
+            }
             continue;
         }
 
@@ -4303,10 +4545,16 @@ void TY_(ParseNoFrames)(TidyDocImpl* doc, Node *noframes, GetTokenMode mode)
     }
 
     TY_(ReportError)(doc, noframes, node, MISSING_ENDTAG_FOR);
+    return 0;
 }
 
-void TY_(ParseFrameSet)(TidyDocImpl* doc, Node *frameset, GetTokenMode ARG_UNUSED(mode))
+int TY_(ParseFrameSet)(TidyDocImpl* doc, Node *frameset, GetTokenMode ARG_UNUSED(mode), int recursion_depth)
 {
+    if (recursion_depth > MAX_RECURSION_DEPTH)
+    {
+        doc->recursion_limit_exceeded = 1;
+        return MAX_RECURSION_ERR_CODE;
+    }
     Lexer* lexer = doc->lexer;
     Node *node;
 
@@ -4322,7 +4570,7 @@ void TY_(ParseFrameSet)(TidyDocImpl* doc, Node *frameset, GetTokenMode ARG_UNUSE
             TY_(FreeNode)( doc, node);
             frameset->closed = yes;
             TrimSpaces(doc, frameset);
-            return;
+            return 0;
         }
 
         /* deal with comments etc. */
@@ -4336,11 +4584,15 @@ void TY_(ParseFrameSet)(TidyDocImpl* doc, Node *frameset, GetTokenMode ARG_UNUSE
             continue; 
         }
 
+        int result;
         if (TY_(nodeIsElement)(node))
         {
             if (node->tag && node->tag->model & CM_HEAD)
             {
-                MoveToHead(doc, frameset, node);
+                if ((result = MoveToHead(doc, frameset, node, recursion_depth + 1)) != 0)
+                {
+                    return result;
+                }
                 continue;
             }
         }
@@ -4356,7 +4608,10 @@ void TY_(ParseFrameSet)(TidyDocImpl* doc, Node *frameset, GetTokenMode ARG_UNUSE
         {
             TY_(InsertNodeAtEnd)(frameset, node);
             lexer->excludeBlocks = no;
-            ParseTag(doc, node, MixedContent);
+            if ((result = ParseTag(doc, node, MixedContent, recursion_depth + 1)) != 0)
+            {
+                return result;
+            }
             continue;
         }
         else if (node->type == StartEndTag && (node->tag->model & CM_FRAMES))
@@ -4377,10 +4632,12 @@ void TY_(ParseFrameSet)(TidyDocImpl* doc, Node *frameset, GetTokenMode ARG_UNUSE
     }
 
     TY_(ReportError)(doc, frameset, node, MISSING_ENDTAG_FOR);
+    return 0;
 }
 
-void TY_(ParseHTML)(TidyDocImpl* doc, Node *html, GetTokenMode mode)
+int TY_(ParseHTML)(TidyDocImpl* doc, Node *html, GetTokenMode mode, int recursion_depth)
 {
+
     Node *node, *head;
     Node *frameset = NULL;
     Node *noframes = NULL;
@@ -4429,7 +4686,11 @@ void TY_(ParseHTML)(TidyDocImpl* doc, Node *html, GetTokenMode mode)
 
     head = node;
     TY_(InsertNodeAtEnd)(html, head);
-    TY_(ParseHead)(doc, head, mode);
+    int result;
+    if ((result = TY_(ParseHead)(doc, head, mode, recursion_depth + 1)) != 0)
+    {
+        return result;
+    };
 
     for (;;)
     {
@@ -4441,12 +4702,12 @@ void TY_(ParseHTML)(TidyDocImpl* doc, Node *html, GetTokenMode mode)
             {
                 node = TY_(InferredTag)(doc, TidyTag_BODY);
                 TY_(InsertNodeAtEnd)(html, node);
-                TY_(ParseBody)(doc, node, mode);
+                TY_(ParseBody)(doc, node, mode, recursion_depth + 1);
             }
 #if !defined(NDEBUG) && defined(_MSC_VER)
             SPRTF("Exit ParseHTML 1...\n");
 #endif
-            return;
+            return 0;
         }
 
         /* robustly handle html tags */
@@ -4491,7 +4752,10 @@ void TY_(ParseHTML)(TidyDocImpl* doc, Node *html, GetTokenMode mode)
                             noframes->type = StartTag;
                     }
 
-                    ParseTag(doc, noframes, mode);
+                    if ((result = ParseTag(doc, noframes, mode, recursion_depth + 1)) != 0)
+                    {
+                        return result;
+                    }
                     continue;
                 }
             }
@@ -4516,7 +4780,10 @@ void TY_(ParseHTML)(TidyDocImpl* doc, Node *html, GetTokenMode mode)
                 frameset = node;
 
             TY_(InsertNodeAtEnd)(html, node);
-            ParseTag(doc, node, mode);
+            if ((result = ParseTag(doc, node, mode, recursion_depth + 1)) != 0)
+            {
+                return result;
+            }
 
             /*
               see if it includes a noframes element so
@@ -4557,7 +4824,10 @@ void TY_(ParseHTML)(TidyDocImpl* doc, Node *html, GetTokenMode mode)
             else
                 TY_(FreeNode)( doc, node);
 
-            ParseTag(doc, noframes, mode);
+            if ((result = ParseTag(doc, noframes, mode, recursion_depth + 1)) !=0 )
+            {
+                return result;
+            }
             continue;
         }
 
@@ -4565,7 +4835,10 @@ void TY_(ParseHTML)(TidyDocImpl* doc, Node *html, GetTokenMode mode)
         {
             if (node->tag && node->tag->model & CM_HEAD)
             {
-                MoveToHead(doc, html, node);
+                if ((result = MoveToHead(doc, html, node, recursion_depth + 1)) != 0)
+                {
+                    return result;
+                }
                 continue;
             }
 
@@ -4597,7 +4870,10 @@ void TY_(ParseHTML)(TidyDocImpl* doc, Node *html, GetTokenMode mode)
             }
 
             TY_(ConstrainVersion)(doc, VERS_FRAMESET);
-            ParseTag(doc, noframes, mode);
+            if ((result = ParseTag(doc, noframes, mode, recursion_depth + 1)) != 0)
+            {
+                return result;
+            }
             continue;
         }
 
@@ -4613,10 +4889,14 @@ void TY_(ParseHTML)(TidyDocImpl* doc, Node *html, GetTokenMode mode)
     /* node must be body */
 
     TY_(InsertNodeAtEnd)(html, node);
-    ParseTag(doc, node, mode);
+    if ((result = ParseTag(doc, node, mode, recursion_depth + 1)) != 0)
+    {
+        return result;
+    }
 #if !defined(NDEBUG) && defined(_MSC_VER)
     SPRTF("Exit ParseHTML 2...\n");
 #endif
+    return 0;
 }
 
 static Bool nodeCMIsOnlyInline( Node* node )
@@ -4866,7 +5146,7 @@ void TY_(ParseDocument)(TidyDocImpl* doc)
             }
         }
         TY_(InsertNodeAtEnd)( &doc->root, html);
-        TY_(ParseHTML)( doc, html, IgnoreWhitespace );
+        TY_(ParseHTML)( doc, html, IgnoreWhitespace , 0);
         break;
     }
 
@@ -4881,7 +5161,7 @@ void TY_(ParseDocument)(TidyDocImpl* doc)
         /* a later check should complain if <body> is empty */
         html = TY_(InferredTag)(doc, TidyTag_HTML);
         TY_(InsertNodeAtEnd)( &doc->root, html);
-        TY_(ParseHTML)(doc, html, IgnoreWhitespace);
+        TY_(ParseHTML)(doc, html, IgnoreWhitespace, 0);
     }
 
     if (!TY_(FindTITLE)(doc))
@@ -4946,6 +5226,7 @@ static void ParseXMLElement(TidyDocImpl* doc, Node *element, GetTokenMode mode)
 {
     Lexer* lexer = doc->lexer;
     Node *node;
+    if (!element) { return; }
 
     /* if node is pre or has xml:space="preserve" then do so */
 
