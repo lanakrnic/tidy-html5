@@ -165,7 +165,11 @@ static CheckAttribs CheckHTML;
  * but allow this table to be ADJUSTED if NOT HTML5
  * was static const Dict tag_defs[] = 
 \*/
-static Dict tag_defs[] =
+#ifdef _MSC_VER
+static __declspec(thread) Dict tag_defs[] =
+#else
+static __thread Dict tag_defs[] =
+#endif
 {
   { TidyTag_UNKNOWN,    "unknown!",   VERS_UNKNOWN,         NULL,                       (0),                                           NULL,          NULL           },
 
