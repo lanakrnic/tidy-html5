@@ -863,7 +863,7 @@ const Attribute* TY_(FindAttribute)( TidyDocImpl* doc, AttVal *attval )
 AttVal* TY_(GetAttrByName)( Node *node, ctmbstr name )
 {
     AttVal *attr;
-    for (attr = node->attributes; attr != NULL; attr = attr->next)
+    for (attr = node ? node->attributes : NULL; attr != NULL; attr = attr->next)
     {
         if (attr->attribute && TY_(tmbstrcmp)(attr->attribute, name) == 0)
             break;
