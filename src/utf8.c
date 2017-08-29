@@ -315,7 +315,7 @@ int TY_(DecodeUTF8BytesToChar)( uint* c, uint firstByte, ctmbstr successorBytes,
         }
     }
 
-#if 1 && defined(_DEBUG)
+#if 0 && defined(_DEBUG)
     if ( hasError )
     {
        /* debug */
@@ -447,7 +447,7 @@ uint TY_(GetUTF8)( ctmbstr str, uint *ch )
     err = TY_(DecodeUTF8BytesToChar)( &n, str[0], str+1, NULL, &bytes );
     if (err)
     {
-#if 1 && defined(_DEBUG)
+#if 0 && defined(_DEBUG)
         fprintf(stderr, "pprint UTF-8 decoding error for U+%x : ", n);
 #endif
         n = 0xFFFD; /* replacement char */
