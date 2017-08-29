@@ -3277,7 +3277,7 @@ int TY_(ParseTableTag)(TidyDocImpl* doc, Node *table, GetTokenMode ARG_UNUSED(mo
             }
         }
 
-        if (!(node->tag->model & CM_TABLE))
+        if ((node->tag) && !(node->tag->model & CM_TABLE))
         {
             TY_(UngetToken)( doc );
             TY_(ReportError)(doc, table, node, TAG_NOT_ALLOWED_IN);
@@ -3875,10 +3875,11 @@ int TY_(ParseScript)(TidyDocImpl* doc, Node *script, GetTokenMode ARG_UNUSED(mod
     if (!(node && node->type == EndTag && node->tag &&
         node->tag->id == script->tag->id))
     {
-        TY_(ReportError)(doc, script, node, MISSING_ENDTAG_FOR);
-
         if (node)
+        {
+            TY_(ReportError)(doc, script, node, MISSING_ENDTAG_FOR);
             TY_(UngetToken)(doc);
+        }
     }
     else
     {
