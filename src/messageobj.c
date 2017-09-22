@@ -256,6 +256,7 @@ void TY_(tidyMessageRelease)( TidyMessageImpl *message )
     TidyDocFree( tidyDocToImpl(message->tidyDoc), message->messagePos );
     TidyDocFree( tidyDocToImpl(message->tidyDoc), message->messageOutputDefault );
     TidyDocFree( tidyDocToImpl(message->tidyDoc), message->messageOutput );
+    TidyDocFree( tidyDocToImpl(message->tidyDoc), message );
 }
 
 
