@@ -428,6 +428,8 @@ void TY_(ReportError)(TidyDocImpl* doc, Node *element, Node *node, uint code)
        added to the output sink TidyShowWarnings is enabled. */
     if (cfgBool( doc, TidyShowWarnings ))
         messageOut( message2 );
+    else
+        TY_(tidyMessageRelease)(message2);
 }
 
 
