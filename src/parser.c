@@ -3798,7 +3798,6 @@ int TY_(ParseScript)(TidyDocImpl* doc, Node *script, GetTokenMode ARG_UNUSED(mod
 
         if (node)
         {
-            TY_(ReportError)(doc, script, node, MISSING_ENDTAG_FOR);
             TY_(UngetToken)(doc);
         }
     }
