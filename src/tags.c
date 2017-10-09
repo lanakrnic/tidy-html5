@@ -10,9 +10,6 @@
 #include "tidy-int.h"
 #include "message.h"
 #include "tmbstr.h"
-#if !defined(NDEBUG) && defined(_MSC_VER)
-#include "sprtf.h"
-#endif
 /* Attribute checking methods */
 static CheckAttribs CheckIMG;
 static CheckAttribs CheckLINK;
@@ -301,7 +298,7 @@ static __thread Dict tag_defs[] =
   { TidyTag_ARTICLE,     "article",      VERS_ELEM_ARTICLE,     &TY_(W3CAttrsFor_ARTICLE)[0],     (CM_BLOCK),                    TY_(ParseBlock),     NULL           },
   { TidyTag_ASIDE,       "aside",        VERS_ELEM_ASIDE,       &TY_(W3CAttrsFor_ASIDE)[0],       (CM_BLOCK),                    TY_(ParseBlock),     NULL           },
   { TidyTag_AUDIO,       "audio",        VERS_ELEM_AUDIO,       &TY_(W3CAttrsFor_AUDIO)[0],       (CM_BLOCK|CM_INLINE),          TY_(ParseBlock),     NULL           },
-  { TidyTag_BDI,         "bdi",          VERS_ELEM_BDI,         &TY_(W3CAttrsFor_BDI)[0],         (CM_BLOCK),                    TY_(ParseBlock),     NULL           },
+  { TidyTag_BDI,         "bdi",          VERS_ELEM_BDI,         &TY_(W3CAttrsFor_BDI)[0],         (CM_INLINE),                   TY_(ParseInline),    NULL           },
   { TidyTag_CANVAS,      "canvas",       VERS_ELEM_CANVAS,      &TY_(W3CAttrsFor_CANVAS)[0],      (CM_BLOCK),                    TY_(ParseBlock),     NULL           },
   { TidyTag_COMMAND,     "command",      VERS_ELEM_COMMAND,     &TY_(W3CAttrsFor_COMMAND)[0],     (CM_HEAD|CM_INLINE|CM_EMPTY),  TY_(ParseEmpty),     NULL           },
   { TidyTag_DATALIST,    "datalist",     VERS_ELEM_DATALIST,    &TY_(W3CAttrsFor_DATALIST)[0],    (CM_INLINE|CM_FIELD),          TY_(ParseDatalist),  NULL           },
@@ -336,7 +333,6 @@ static __thread Dict tag_defs[] =
   { (TidyTagId)0,        NULL,         0,                    NULL,                       (0),                                           NULL,          NULL           }
 };
 
-#if ELEMENT_HASH_LOOKUP
 static uint tagsHash(ctmbstr s)
 {
     uint hashval;
@@ -405,19 +401,15 @@ static void tagsEmptyHash( TidyDocImpl* doc, TidyTagImpl* tags )
         tags->hashtab[i] = NULL;
     }
 }
-#endif /* ELEMENT_HASH_LOOKUP */
 
 static const Dict* tagsLookup( TidyDocImpl* doc, TidyTagImpl* tags, ctmbstr s )
 {
     const Dict *np;
-#if ELEMENT_HASH_LOOKUP
     const DictHash* p;
-#endif
 
     if (!s)
         return NULL;
 
-#if ELEMENT_HASH_LOOKUP
     /* this breaks if declared elements get changed between two   */
     /* parser runs since Tidy would use the cached version rather */
     /* than the new one.                                          */
@@ -434,17 +426,6 @@ static const Dict* tagsLookup( TidyDocImpl* doc, TidyTagImpl* tags, ctmbstr s )
     for (np = tags->declared_tag_list; np; np = np->next)
         if (TY_(tmbstrcmp)(s, np->name) == 0)
             return tagsInstall(doc, tags, np);
-#else
-
-    for (np = tag_defs + 1; np < tag_defs + N_TIDY_TAGS; ++np)
-        if (TY_(tmbstrcmp)(s, np->name) == 0)
-            return np;
-
-    for (np = tags->declared_tag_list; np; np = np->next)
-        if (TY_(tmbstrcmp)(s, np->name) == 0)
-            return np;
-
-#endif /* ELEMENT_HASH_LOOKUP */
 
     return NULL;
 }
@@ -496,10 +477,7 @@ static void declare( TidyDocImpl* doc, TidyTagImpl* tags,
     }
 }
 
-#if !defined(NDEBUG) && defined(_MSC_VER)
-/* ==================================================================== 
-   MSVC DEBUG ONLY
- */
+#if defined(ENABLE_DEBUG_LOG)
 void ListElementsPerVersion( uint vers, Bool has )
 {
     uint val, cnt, total, wrap = 10;
@@ -545,7 +523,7 @@ void show_have_html5(void)
     ListElementsPerVersion( VERS_HTML5, yes );
 }
 
-#endif
+#endif /* defined(ENABLE_DEBUG_LOG) */
 
 /* public interface for finding tag by name */
 Bool TY_(FindTag)( TidyDocImpl* doc, Node *node )
@@ -585,7 +563,7 @@ Bool TY_(FindTag)( TidyDocImpl* doc, Node *node )
 
         /* Output a message the first time we encounter an autonomous custom 
            tag. This applies despite the HTML5 mode. */
-        TY_(ReportNotice)(doc, node, node, CUSTOM_TAG_DETECTED);
+        TY_(Report)(doc, node, node, CUSTOM_TAG_DETECTED);
 
         return yes;
     }
@@ -746,9 +724,7 @@ void TY_(FreeDeclaredTags)( TidyDocImpl* doc, UserTagType tagType )
 
         if ( deleteIt )
         {
-#if ELEMENT_HASH_LOOKUP
           tagsRemoveFromHash( doc, &doc->tags, curr->name );
-#endif
           FreeDict( doc, curr );
           if ( prev )
             prev->next = next;
@@ -812,9 +788,7 @@ void TY_(AdjustTags)( TidyDocImpl *doc )
         np->parser = TY_(ParseBlock);
     }
 
-#if ELEMENT_HASH_LOOKUP
     tagsEmptyHash(doc, tags); /* not sure this is really required, but to be sure */
-#endif
     doc->HTML5Mode = no;   /* set *NOT* HTML5 mode */
 
 }
@@ -861,9 +835,7 @@ void TY_(ResetTags)( TidyDocImpl *doc )
         np->parser = TY_(ParseInline);
     }
 
-#if ELEMENT_HASH_LOOKUP
     tagsEmptyHash( doc, tags ); /* not sure this is really required, but to be sure */
-#endif
     doc->HTML5Mode = yes;   /* set HTML5 mode */
 }
 
@@ -871,9 +843,7 @@ void TY_(FreeTags)( TidyDocImpl* doc )
 {
     TidyTagImpl* tags = &doc->tags;
 
-#if ELEMENT_HASH_LOOKUP
     tagsEmptyHash( doc, tags );
-#endif
     TY_(FreeDeclaredTags)( doc, tagtype_null );
     FreeDict( doc, tags->xml_tags );
 
@@ -928,7 +898,10 @@ void CheckIMG( TidyDocImpl* doc, Node *node )
     if ( cfg(doc, TidyAccessibilityCheckLevel) == 0 )
     {
         if ( HasIsMap && !HasUseMap )
+        {
             TY_(ReportAttrError)( doc, node, NULL, MISSING_IMAGEMAP);
+            doc->badAccess |= BA_MISSING_IMAGE_MAP;
+        }
     }
 }
 
@@ -994,7 +967,7 @@ void CheckTABLE( TidyDocImpl* doc, Node *node )
         if (HasSummary && isHTML5)
         {
             /* #210 - has summary, and is HTML5, then report obsolete */
-            TY_(ReportWarning)(doc, node, node, BAD_SUMMARY_HTML5);
+            TY_(Report)(doc, node, node, BAD_SUMMARY_HTML5);
         } 
         else if (!HasSummary && !isHTML5) 
         {
@@ -1056,18 +1029,6 @@ Bool TY_(nodeIsElement)( Node* node )
   return ( node &&
            (node->type == StartTag || node->type == StartEndTag) );
 }
-
-#if 0
-/* Compare & result to operand.  If equal, then all bits
-** requested are set.
-*/
-Bool nodeMatchCM( Node* node, uint contentModel )
-{
-  return ( node && node->tag &&
-           (node->tag->model & contentModel) == contentModel );
-}
-#endif
-
 
 Bool TY_(elementIsAutonomousCustomFormat)( ctmbstr element )
 {

@@ -10,9 +10,6 @@
 #include "tidy-int.h"
 #include "limits.h"
 #include "tmbstr.h"
-#if !defined(NDEBUG) && defined(_MSC_VER)
-#include "sprtf.h"
-#endif
 
 
 /*********************************************************************
@@ -256,7 +253,7 @@ void TY_(tidyMessageRelease)( TidyMessageImpl *message )
     TidyDocFree( tidyDocToImpl(message->tidyDoc), message->messagePos );
     TidyDocFree( tidyDocToImpl(message->tidyDoc), message->messageOutputDefault );
     TidyDocFree( tidyDocToImpl(message->tidyDoc), message->messageOutput );
-    TidyDocFree( tidyDocToImpl(message->tidyDoc), message );
+    TidyDocFree(tidyDocToImpl(message->tidyDoc), message); /* Issue #597 - and discard the message structure */
 }
 
 

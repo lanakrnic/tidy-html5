@@ -43,11 +43,7 @@ struct _TidyDocImpl
     TidyConfigImpl      config;
     TidyTagImpl         tags;
     TidyAttribImpl      attribs;
-
-#if SUPPORT_ACCESSIBILITY_CHECKS
-    /* Accessibility Checks state */
     TidyAccessImpl      access;
-#endif
 
     /* The Pretty Print buffer */
     TidyPrintImpl       pprint;
@@ -60,6 +56,7 @@ struct _TidyDocImpl
     TidyReportCallback  reportCallback;
     TidyMessageCallback messageCallback;
     TidyOptCallback     pOptCallback;
+    TidyConfigCallback  pConfigCallback;
     TidyPPProgress      progressCallback;
 
     /* Parse + Repair Results */
@@ -75,6 +72,7 @@ struct _TidyDocImpl
     uint                badLayout;   /* for bad style errors */
     uint                badChars;    /* for bad char encodings */
     uint                badForm;     /* bit field, for badly placed form tags, or other format errors */
+    uint                footnotes;   /* bit field, for other footnotes, until formalized */
     Bool                recursion_limit_exceeded;
 
     Bool                HTML5Mode;   /* current mode is html5 */
@@ -87,10 +85,6 @@ struct _TidyDocImpl
     void*               appData;
     uint                nClassId;
     Bool                inputHadBOM;
-
-#ifdef TIDY_STORE_ORIGINAL_TEXT
-    Bool                storeText;
-#endif
 
 #if PRESERVE_FILE_TIMES
     struct utimbuf      filetimes;
@@ -134,21 +128,6 @@ struct _TidyMessageImpl
 };
 
 
-/* Twizzle internal/external types */
-#ifdef NEVER
-TidyDocImpl* tidyDocToImpl( TidyDoc tdoc );
-TidyDoc      tidyImplToDoc( TidyDocImpl* impl );
-
-Node*        tidyNodeToImpl( TidyNode tnod );
-TidyNode     tidyImplToNode( Node* node );
-
-AttVal*      tidyAttrToImpl( TidyAttr tattr );
-TidyAttr     tidyImplToAttr( AttVal* attval );
-
-const TidyOptionImpl* tidyOptionToImpl( TidyOption topt );
-TidyOption   tidyImplToOption( const TidyOptionImpl* option );
-#else
-
 #define tidyDocToImpl( tdoc )           ((TidyDocImpl*)(tdoc))
 #define tidyImplToDoc( doc )            ((TidyDoc)(doc))
 
@@ -164,7 +143,6 @@ TidyOption   tidyImplToOption( const TidyOptionImpl* option );
 #define tidyOptionToImpl( topt )        ((const TidyOptionImpl*)(topt))
 #define tidyImplToOption( option )      ((TidyOption)(option))
 
-#endif
 
 /** Wrappers for easy memory allocation using the document's allocator */
 #define TidyDocAlloc(doc, size) TidyAlloc((doc)->allocator, size)

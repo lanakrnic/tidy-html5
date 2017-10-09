@@ -548,6 +548,8 @@ TIDY_EXPORT int TIDY_CALL         tidySetOutCharEncoding(TidyDoc tdoc,  /**< The
 /** This typedef represents the required signature for your provided callback
  ** function should you wish to register one with tidySetOptionCallback().
  ** Your callback function will be provided with the following parameters.
+ ** Note that this is deprecated and you should instead migrate to
+ ** tidySetConfigCallback().
  ** @param option The option name that was provided.
  ** @param value The option value that was provided
  ** @return Your callback function will return `yes` if it handles the provided
@@ -560,10 +562,36 @@ typedef Bool (TIDY_CALL *TidyOptCallback)(ctmbstr option, ctmbstr value);
  ** configuration file options. Setting this callback allows a LibTidy
  ** application developer to examine command-line and configuration file options
  ** after LibTidy has examined them and failed to recognize them.
+ ** Note that this is deprecated and you should instead migrate to
+ ** tidySetConfigCallback().
  ** @result Returns `yes` upon success.
  */
 TIDY_EXPORT Bool TIDY_CALL          tidySetOptionCallback(TidyDoc tdoc,                /**< The document to apply the callback to. */
                                                           TidyOptCallback pOptCallback /**< The name of a function of type TidyOptCallback() to serve as your callback. */
+                                                          );
+
+/** This typedef represents the required signature for your provided callback
+ ** function should you wish to register one with tidySetOptionCallback().
+ ** Your callback function will be provided with the following parameters.
+ ** @param tdoc The document instance for which the callback was invoked.
+ ** @param option The option name that was provided.
+ ** @param value The option value that was provided
+ ** @return Your callback function will return `yes` if it handles the provided
+ **         option, or `no` if it does not. In the latter case, Tidy will issue
+ **         an unknown configuration option error.
+ */
+typedef Bool (TIDY_CALL *TidyConfigCallback)(TidyDoc tdoc, ctmbstr option, ctmbstr value);
+
+/** Applications using TidyLib may want to augment command-line and
+ ** configuration file options. Setting this callback allows a LibTidy
+ ** application developer to examine command-line and configuration file options
+ ** after LibTidy has examined them and failed to recognize them.
+ ** Note that this is deprecated and you should instead migrate to
+ ** tidySetConfigCallback().
+ ** @result Returns `yes` upon success.
+ */
+TIDY_EXPORT Bool TIDY_CALL          tidySetConfigCallback(TidyDoc tdoc,                      /**< The document to apply the callback to. */
+                                                          TidyConfigCallback pConfigCallback /**< The name of a function of type TidyConfigCallback() to serve as your callback. */
                                                           );
 
 /** @}
@@ -897,7 +925,7 @@ TIDY_EXPORT TidyIterator TIDY_CALL  tidyOptGetDocLinksList(TidyDoc tdoc,  /**< T
 
 /** Given a valid TidyIterator initiated with tidyOptGetDocLinksList(), returns
  ** a TidyOption instance.
- ** @result Returns in instane of TidyOption.
+ ** @result Returns in instance of TidyOption.
  */
 TIDY_EXPORT TidyOption TIDY_CALL    tidyOptGetNextDocLinks(TidyDoc tdoc,     /**< The tidy document to query. */
                                                            TidyIterator* pos /**< The TidyIterator (initiated with tidyOptGetDocLinksList()) token. */
@@ -1390,10 +1418,8 @@ TIDY_EXPORT double TIDY_CALL tidyGetArgValueDouble(TidyMessage tmessage,    /**<
  ** Your callback function will be provided with the following parameters.
  ** @param tdoc Indicates the source tidy document.
  ** @param line Indicates the line in the source document at this point in the process.
- ** @param column Indicates the column in the source document at this point in the process.
+ ** @param col Indicates the column in the source document at this point in the process.
  ** @param destLine Indicates the line number in the output document at this point in the process.
- ** @return Your callback function will return `yes` if Tidy should include the
- **         report in its own output sink, or `no` if Tidy should suppress it.
  */
 typedef void (TIDY_CALL *TidyPPProgress)( TidyDoc tdoc, uint line, uint col, uint destLine );
 
@@ -1478,8 +1504,8 @@ TIDY_EXPORT int TIDY_CALL         tidyParseSource(TidyDoc tdoc,           /**< T
  */
 TIDY_EXPORT int TIDY_CALL         tidyCleanAndRepair( TidyDoc tdoc );
 
-/** Run configured diagnostics on parsed and repaired markup. You must call
- ** tidyCleanAndRepair() before using this function.
+/** Reports the document type and diagnostic statistics on parsed and repaired 
+ ** markup. You must call tidyCleanAndRepair() before using this function.
  ** @param tdoc The tidy document to use.
  ** @result An integer representing the status.
  */
@@ -1870,7 +1896,7 @@ TIDY_EXPORT uint TIDY_CALL tidyErrorCodeFromKey(ctmbstr code);
  ** @result Returns a TidyIterator, which is a token used to represent the
  **         current position in a list within LibTidy.
  */
-TIDY_EXPORT TidyIterator TIDY_CALL getErrorCodeList();
+TIDY_EXPORT TidyIterator TIDY_CALL getErrorCodeList(void);
 
 /** Given a valid TidyIterator initiated with getErrorCodeList(), returns
  ** an instance of the opaque type TidyMessageArgument, which serves as a token
@@ -1918,7 +1944,7 @@ TIDY_EXPORT Bool TIDY_CALL tidySetLanguage( ctmbstr languageCode );
 /** Gets the current language used by Tidy.
  ** @result Returns a string indicating the currently set language.
  */
-TIDY_EXPORT ctmbstr TIDY_CALL tidyGetLanguage();
+TIDY_EXPORT ctmbstr TIDY_CALL tidyGetLanguage(void);
 
 /** @}
  ** @name Locale Mappings
@@ -1950,7 +1976,7 @@ opaque_type(tidyLocaleMapItem);
  ** @result Returns a TidyIterator, which is a token used to represent the
  **         current position in a list within LibTidy.
  */
-TIDY_EXPORT TidyIterator TIDY_CALL getWindowsLanguageList();
+TIDY_EXPORT TidyIterator TIDY_CALL getWindowsLanguageList(void);
 
 /** Given a valid TidyIterator initiated with getWindowsLanguageList(), returns
  ** a pointer to a tidyLocaleMapItem, which can be further interrogated with
@@ -2018,7 +2044,7 @@ TIDY_EXPORT ctmbstr TIDY_CALL tidyDefaultString( uint messageType );
  ** @result Returns a TidyIterator, which is a token used to represent the
  **         current position in a list within LibTidy.
  */
-TIDY_EXPORT TidyIterator TIDY_CALL getStringKeyList();
+TIDY_EXPORT TidyIterator TIDY_CALL getStringKeyList(void);
 
 /** Given a valid TidyIterator initiated with getStringKeyList(), returns
  ** an unsigned integer representing the next key value.
@@ -2048,7 +2074,7 @@ TIDY_EXPORT uint TIDY_CALL getNextStringKey( TidyIterator* iter );
  ** @result Returns a TidyIterator, which is a token used to represent the
  **         current position in a list within LibTidy.
  */
-TIDY_EXPORT TidyIterator TIDY_CALL getInstalledLanguageList();
+TIDY_EXPORT TidyIterator TIDY_CALL getInstalledLanguageList(void);
 
 /** Given a valid TidyIterator initiated with getInstalledLanguageList(),
  ** returns a string representing a language name that is installed in Tidy.

@@ -34,12 +34,6 @@
 #include "mappedio.h"
 #include "language.h"
 
-#ifdef TIDY_WIN32_MLANG_SUPPORT
-#include "win32tc.h"
-#endif
-#if !defined(NDEBUG) && defined(_MSC_VER)
-#include "sprtf.h"
-#endif
 
 /* Create/Destroy a Tidy "document" object */
 static TidyDocImpl* tidyDocCreate( TidyAllocator *allocator );
@@ -73,43 +67,6 @@ static int          tidyDocSaveBuffer( TidyDocImpl* impl, TidyBuffer* outbuf );
 static int          tidyDocSaveSink( TidyDocImpl* impl, TidyOutputSink* docOut );
 static int          tidyDocSaveStream( TidyDocImpl* impl, StreamOut* out );
 
-#ifdef NEVER
-TidyDocImpl* tidyDocToImpl( TidyDoc tdoc )
-{
-  return (TidyDocImpl*) tdoc;
-}
-TidyDoc      tidyImplToDoc( TidyDocImpl* impl )
-{
-  return (TidyDoc) impl;
-}
-
-Node*        tidyNodeToImpl( TidyNode tnod )
-{
-  return (Node*) tnod;
-}
-TidyNode     tidyImplToNode( Node* node )
-{
-  return (TidyNode) node;
-}
-
-AttVal*      tidyAttrToImpl( TidyAttr tattr )
-{
-  return (AttVal*) tattr;
-}
-TidyAttr     tidyImplToAttr( AttVal* attval )
-{
-  return (TidyAttr) attval;
-}
-
-const TidyOptionImpl* tidyOptionToImpl( TidyOption topt )
-{
-  return (const TidyOptionImpl*) topt;
-}
-TidyOption   tidyImplToOption( const TidyOptionImpl* option )
-{
-  return (TidyOption) option;
-}
-#endif
 
 /* Tidy public interface
 **
@@ -181,6 +138,7 @@ void          tidyDocRelease( TidyDocImpl* doc )
 
         TY_(FreeConfig)( doc );
         TY_(FreeAttrTable)( doc );
+        TY_(FreeAttrPriorityList)( doc );
         TY_(FreeTags)( doc );
         /*\ 
          *  Issue #186 - Now FreeNode depend on the doctype, so the lexer is needed
@@ -227,6 +185,17 @@ Bool TIDY_CALL        tidySetOptionCallback( TidyDoc tdoc, TidyOptCallback pOptC
   if ( impl )
   {
     impl->pOptCallback = pOptCallback;
+    return yes;
+  }
+  return no;
+}
+
+Bool TIDY_CALL         tidySetConfigCallback(TidyDoc tdoc, TidyConfigCallback pConfigCallback)
+{
+  TidyDocImpl* impl = tidyDocToImpl( tdoc );
+  if ( impl )
+  {
+    impl->pConfigCallback = pConfigCallback;
     return yes;
   }
   return no;
@@ -857,44 +826,6 @@ double TIDY_CALL tidyGetArgValueDouble( TidyMessage tmessage, TidyMessageArgumen
 }
 
 
-
-
-#if 0   /* Not yet */
-int         tidySetContentOutputSink( TidyDoc tdoc, TidyOutputSink* outp )
-{
-  TidyDocImpl* impl = tidyDocToImpl( tdoc );
-  if ( impl )
-  {
-    impl->docOut = outp;
-    return 0;
-  }
-  return -EINVAL;
-}
-int         tidySetDiagnosticOutputSink( TidyDoc tdoc, TidyOutputSink* outp )
-{
-  TidyDocImpl* impl = tidyDocToImpl( tdoc );
-  if ( impl )
-  {
-    impl->msgOut = outp;
-    return 0;
-  }
-  return -EINVAL;
-}
-
-
-/* Library helpers
-*/
-cmbstr       tidyLookupMessage( TidyDoc tdoc, int errorNo )
-{
-  TidyDocImpl* impl = tidyDocToImpl( tdoc );
-  cmbstr mssg = NULL;
-  if ( impl )
-    mssg = tidyMessage_Lookup( impl->messages, errorNo );
-  return mssg;
-}
-#endif
-
-
 FILE* TIDY_CALL   tidySetErrorFile( TidyDoc tdoc, ctmbstr errfilnam )
 {
     TidyDocImpl* impl = tidyDocToImpl( tdoc );
@@ -910,7 +841,7 @@ FILE* TIDY_CALL   tidySetErrorFile( TidyDoc tdoc, ctmbstr errfilnam )
             return errout;
         }
         else /* Emit message to current error sink */
-            TY_(FileError)( impl, errfilnam, TidyError, FILE_CANT_OPEN );
+            TY_(ReportFileError)( impl, errfilnam, FILE_CANT_OPEN );
     }
     return NULL;
 }
@@ -1030,8 +961,8 @@ void TIDY_CALL         tidyGeneralInfo( TidyDoc tdoc )
     TidyDocImpl* impl = tidyDocToImpl( tdoc );
     if ( impl )
     {
-        TY_(DialogueMessage)( impl, TEXT_GENERAL_INFO, TidyDialogueInfo);
-        TY_(DialogueMessage)( impl, TEXT_GENERAL_INFO_PLEA, TidyDialogueInfo);
+        TY_(Dialogue)( impl, TEXT_GENERAL_INFO );
+        TY_(Dialogue)( impl, TEXT_GENERAL_INFO_PLEA );
     }
 }
 
@@ -1080,7 +1011,7 @@ int   tidyDocParseFile( TidyDocImpl* doc, ctmbstr filnam )
 
     if ( !fin )
     {
-        TY_(FileError)( doc, filnam, TidyError, FILE_NOT_FILE );
+        TY_(ReportFileError)( doc, filnam, FILE_NOT_FILE );
         return status;
     }
 
@@ -1117,7 +1048,7 @@ int   tidyDocParseFile( TidyDocImpl* doc, ctmbstr filnam )
         TY_(freeStreamIn)(in);
     }
     else /* Error message! */
-        TY_(FileError)( doc, filnam, TidyError, FILE_CANT_OPEN );
+        TY_(ReportFileError)( doc, filnam, FILE_CANT_OPEN );
     return status;
 #endif
 }
@@ -1231,7 +1162,7 @@ int         tidyDocSaveFile( TidyDocImpl* doc, ctmbstr filnam )
 #endif /* PRESERVFILETIMES */
     }
     if ( status < 0 ) /* Error message! */
-        TY_(FileError)( doc, filnam, TidyError, FILE_CANT_OPEN );
+        TY_(ReportFileError)( doc, filnam, FILE_CANT_OPEN );
     return status;
 }
 
@@ -1247,35 +1178,30 @@ int         tidyDocSaveFile( TidyDocImpl* doc, ctmbstr filnam )
 */
 
 #if !defined(NO_SETMODE_SUPPORT)
-
-#if defined(_WIN32) || defined(OS2_OS)
-#include <fcntl.h>
-#include <io.h>
-#endif
-
+#  if defined(_WIN32) || defined(OS2_OS)
+#   include <fcntl.h>
+#     include <io.h>
+#   endif
 #endif
 
 int         tidyDocSaveStdout( TidyDocImpl* doc )
 {
 #if !defined(NO_SETMODE_SUPPORT)
-
-#if defined(_WIN32) || defined(OS2_OS)
+#  if defined(_WIN32) || defined(OS2_OS)
     int oldstdoutmode = -1, oldstderrmode = -1;
+#  endif
 #endif
 
-#endif
     int status = 0;
     uint outenc = cfg( doc, TidyOutCharEncoding );
     uint nl = cfg( doc, TidyNewline );
     StreamOut* out = TY_(FileOutput)( doc, stdout, outenc, nl );
 
 #if !defined(NO_SETMODE_SUPPORT)
-
-#if defined(_WIN32) || defined(OS2_OS)
+#  if defined(_WIN32) || defined(OS2_OS)
     oldstdoutmode = setmode( fileno(stdout), _O_BINARY );
     oldstderrmode = setmode( fileno(stderr), _O_BINARY );
-#endif
-
+#  endif
 #endif
 
     if ( 0 == status )
@@ -1285,14 +1211,12 @@ int         tidyDocSaveStdout( TidyDocImpl* doc )
     fflush(stderr);
 
 #if !defined(NO_SETMODE_SUPPORT)
-
-#if defined(_WIN32) || defined(OS2_OS)
+#  if defined(_WIN32) || defined(OS2_OS)
     if ( oldstdoutmode != -1 )
         oldstdoutmode = setmode( fileno(stdout), oldstdoutmode );
     if ( oldstderrmode != -1 )
         oldstderrmode = setmode( fileno(stderr), oldstderrmode );
-#endif
-
+#  endif
 #endif
 
     TidyDocFree( doc, out );
@@ -1437,11 +1361,6 @@ int         TY_(DocParseStream)( TidyDocImpl* doc, StreamIn* in )
         TY_(SetOptionInt)(doc, TidyInCharEncoding, bomEnc);
     }
 
-#ifdef TIDY_WIN32_MLANG_SUPPORT
-    if (in->encoding > WIN32MLANG)
-        TY_(Win32MLangInitInputTranscoder)(in, in->encoding);
-#endif /* TIDY_WIN32_MLANG_SUPPORT */
-
     /* Tidy doesn't alter the doctype for generic XML docs */
     if ( xmlIn )
     {
@@ -1457,28 +1376,17 @@ int         TY_(DocParseStream)( TidyDocImpl* doc, StreamIn* in )
             TidyPanic( doc->allocator, integrity );
     }
 
-#ifdef TIDY_WIN32_MLANG_SUPPORT
-    TY_(Win32MLangUninitInputTranscoder)(in);
-#endif /* TIDY_WIN32_MLANG_SUPPORT */
-
     doc->docIn = NULL;
     return tidyDocStatus( doc );
 }
 
 int         tidyDocRunDiagnostics( TidyDocImpl* doc )
 {
-    Bool quiet = cfgBool( doc, TidyQuiet );
-    Bool force = cfgBool( doc, TidyForceOutput );
+    TY_(ReportMarkupVersion)( doc );
+    TY_(ReportNumWarnings)( doc );
 
-    if ( !quiet )
-    {
-
-        TY_(ReportMarkupVersion)( doc );
-        TY_(ReportNumWarnings)( doc );
-    }
-
-    if ( doc->errors > 0 && !force )
-        TY_(DialogueMessage)(doc, STRING_NEEDS_INTERVENTION, TidyDialogueDoc);
+    if ( doc->errors > 0 && !cfgBool( doc, TidyForceOutput ) )
+        TY_(Dialogue)(doc, STRING_NEEDS_INTERVENTION );
 
      return tidyDocStatus( doc );
 }
@@ -1492,7 +1400,7 @@ void         tidyDocReportDoctype( TidyDocImpl* doc )
 /*****************************************************************************
  *  HTML5 STUFF
  *****************************************************************************/
-#if !defined(NDEBUG) && defined(_MSC_VER)
+#if 0 && defined(ENABLE_DEBUG_LOG)
 extern void show_not_html5(void);
 /* -----------------------------
 List tags that do not have version HTML5 (HT50|XH50)
@@ -1591,9 +1499,7 @@ void TY_(CheckHTML5)( TidyDocImpl* doc, Node* node )
     Bool warn = yes;    /* should this be a warning, error, or report??? */
     AttVal* attr = NULL;
     int i = 0;
-#if !defined(NDEBUG) && defined(_MSC_VER)
-    //    list_not_html5();
-#endif
+
     while (node)
     {
         if ( nodeHasAlignAttr( node ) ) {
@@ -1631,7 +1537,7 @@ void TY_(CheckHTML5)( TidyDocImpl* doc, Node* node )
                 TY_(CoerceNode)(doc, node, TidyTag_ABBR, warn, no);
             } else {
                 if ( !already_strict )
-                    TY_(ReportWarning)(doc, node, node, REMOVED_HTML5);
+                    TY_(Report)(doc, node, node, REMOVED_HTML5);
             }
         } else
         if ( nodeIsAPPLET(node) ) {
@@ -1642,7 +1548,7 @@ void TY_(CheckHTML5)( TidyDocImpl* doc, Node* node )
                 TY_(CoerceNode)(doc, node, TidyTag_OBJECT, warn, no);
             } else {
                 if ( !already_strict )
-                    TY_(ReportWarning)(doc, node, node, REMOVED_HTML5);
+                    TY_(Report)(doc, node, node, REMOVED_HTML5);
             }
         } else
         if ( nodeIsBASEFONT(node) ) {
@@ -1655,7 +1561,7 @@ void TY_(CheckHTML5)( TidyDocImpl* doc, Node* node )
              * - For now just report a warning
              */
             if ( !already_strict )
-                TY_(ReportWarning)(doc, node, node, REMOVED_HTML5);
+                TY_(Report)(doc, node, node, REMOVED_HTML5);
         } else
         if ( nodeIsBIG(node) ) {
             /* big: CSS equivalent 'font-size:larger'
@@ -1677,7 +1583,7 @@ void TY_(CheckHTML5)( TidyDocImpl* doc, Node* node )
                 TY_(CoerceNode)(doc, node, TidyTag_SPAN, warn, no);
             } else {
                 if ( !already_strict )
-                    TY_(ReportWarning)(doc, node, node, REMOVED_HTML5);
+                    TY_(Report)(doc, node, node, REMOVED_HTML5);
             }
         } else
         if ( nodeIsCENTER(node) ) {
@@ -1688,7 +1594,7 @@ void TY_(CheckHTML5)( TidyDocImpl* doc, Node* node )
              * see: static Bool Center2Div( TidyDocImpl* doc, Node *node, Node **pnode)
              */
             if ( !already_strict )
-                TY_(ReportWarning)(doc, node, node, REMOVED_HTML5);
+                TY_(Report)(doc, node, node, REMOVED_HTML5);
         } else
         if ( nodeIsDIR(node) ) {
             /* dir: replace by <ul>
@@ -1696,7 +1602,7 @@ void TY_(CheckHTML5)( TidyDocImpl* doc, Node* node )
              * Should this be CHANGED???
              */
             if ( !already_strict )
-                TY_(ReportWarning)(doc, node, node, REMOVED_HTML5);
+                TY_(Report)(doc, node, node, REMOVED_HTML5);
         } else
         if ( nodeIsFONT(node) ) {
             /* Tidy already handles this -
@@ -1705,13 +1611,13 @@ void TY_(CheckHTML5)( TidyDocImpl* doc, Node* node )
              * done in Bool Font2Span( TidyDocImpl* doc, Node *node, Node **pnode ) (I think?)
              */
             if ( !already_strict )
-                TY_(ReportWarning)(doc, node, node, REMOVED_HTML5);
+                TY_(Report)(doc, node, node, REMOVED_HTML5);
         } else
         if (( nodesIsFRAME(node) ) || ( nodeIsFRAMESET(node) ) || ( nodeIsNOFRAMES(node) )) {
             /* YOW: What to do here?????? Maybe <iframe>????
              */
             if ( !already_strict )
-                TY_(ReportWarning)(doc, node, node, REMOVED_HTML5);
+                TY_(Report)(doc, node, node, REMOVED_HTML5);
         } else
         if ( nodeIsSTRIKE(node) ) {
             /* strike: CSS equivalent 'text-decoration:line-through'
@@ -1722,7 +1628,7 @@ void TY_(CheckHTML5)( TidyDocImpl* doc, Node* node )
                 TY_(CoerceNode)(doc, node, TidyTag_SPAN, warn, no);
             } else {
                 if ( !already_strict )
-                    TY_(ReportWarning)(doc, node, node, REMOVED_HTML5);
+                    TY_(Report)(doc, node, node, REMOVED_HTML5);
             }
         } else
         if ( nodeIsTT(node) ) {
@@ -1736,14 +1642,14 @@ void TY_(CheckHTML5)( TidyDocImpl* doc, Node* node )
                 TY_(CoerceNode)(doc, node, TidyTag_SPAN, warn, no);
             } else {
                 if ( !already_strict )
-                    TY_(ReportWarning)(doc, node, node, REMOVED_HTML5);
+                    TY_(Report)(doc, node, node, REMOVED_HTML5);
             }
         } else
             if (TY_(nodeIsElement)(node)) {
                 if (node->tag) {
                     if ( (!(node->tag->versions & VERS_HTML5) && !(node->tag->versions & VERS_PROPRIETARY)) || (inRemovedInfo(node->tag->id)) ) {
                         if ( !already_strict )
-                            TY_(ReportWarning)(doc, node, node, REMOVED_HTML5);
+                            TY_(Report)(doc, node, node, REMOVED_HTML5);
                     }
                 }
             }
@@ -1796,7 +1702,7 @@ void TY_(CheckHTMLTagsAttribsVersions)( TidyDocImpl* doc, Node* node )
                 /* Version mismatches take priority. */
                 if ( check_versions && !(node->tag->versions & version) )
                 {
-                    TY_(ReportError)(doc, NULL, node, tagReportType );
+                    TY_(Report)(doc, NULL, node, tagReportType );
                 }
                 /* If it's not mismatched, it could still be proprietary. */
                 else if ( node->tag->versions & VERS_PROPRIETARY )
@@ -1816,7 +1722,7 @@ void TY_(CheckHTMLTagsAttribsVersions)( TidyDocImpl* doc, Node* node )
 
                         if ( (htmlIs5 && !tagLooksCustom) || !htmlIs5 )
                         {
-                            TY_(ReportError)(doc, NULL, node, PROPRIETARY_ELEMENT );
+                            TY_(Report)(doc, NULL, node, PROPRIETARY_ELEMENT );
                         }
 
                         if ( nodeIsLAYER(node) )
@@ -1869,7 +1775,7 @@ void TY_(CheckHTMLTagsAttribsVersions)( TidyDocImpl* doc, Node* node )
 }
 
 
-#if !defined(NDEBUG) && defined(_MSC_VER)
+#if defined(ENABLE_DEBUG_LOG)
 /* *** FOR DEBUG ONLY *** */
 const char *dbg_get_lexer_type( void *vp )
 {
@@ -2006,12 +1912,15 @@ int         tidyDocCleanAndRepair( TidyDocImpl* doc )
     Bool mergeEmphasis = cfgBool( doc, TidyMergeEmphasis );
     Node* node;
 
-#if !defined(NDEBUG) && defined(_MSC_VER)
+#if defined(ENABLE_DEBUG_LOG)
     SPRTF("All nodes BEFORE clean and repair\n");
     dbg_show_all_nodes( doc, &doc->root, 0  );
 #endif
     if (tidyXmlTags)
        return tidyDocStatus( doc );
+
+    /* Issue #567 - move style elements from body to head */
+    TY_(CleanStyle)(doc, &doc->root);
 
     /* simplifies <b><b> ... </b> ...</b> etc. */
     if ( mergeEmphasis )
@@ -2043,21 +1952,8 @@ int         tidyDocCleanAndRepair( TidyDocImpl* doc )
     if ( gdoc )
         TY_(CleanGoogleDocument)( doc );
 
-    /*  Move terminating <br /> tags from out of paragraphs  */
-    /*!  Do we want to do this for all block-level elements?  */
-
-    /* This is disabled due to http://tidy.sf.net/bug/681116 */
-#if 0
-    FixBrakes( doc, TY_(FindBody)( doc ));
-#endif
-
     /*  Reconcile http-equiv meta element with output encoding  */
-    if (cfg( doc, TidyOutCharEncoding) != RAW
-#ifndef NO_NATIVE_ISO2022_SUPPORT
-        && cfg( doc, TidyOutCharEncoding) != ISO2022
-#endif
-        )
-        TY_(VerifyHTTPEquiv)( doc, TY_(FindHEAD)( doc ));
+    TY_(TidyMetaCharset)(doc);
 
     if ( !TY_(CheckNodeIntegrity)( &doc->root ) )
         TidyPanic( doc->allocator, integrity );
@@ -2104,6 +2000,7 @@ int         tidyDocCleanAndRepair( TidyDocImpl* doc )
 
         if (tidyMark )
             TY_(AddGenerator)(doc);
+
     }
 
     /* ensure presence of initial <?xml version="1.0"?> */
@@ -2128,12 +2025,12 @@ int         tidyDocCleanAndRepair( TidyDocImpl* doc )
 
         if ( !doc->lexer->isvoyager && doc->xmlDetected )
         {
-            TY_(ReportWarning)(doc, NULL, TY_(FindXmlDecl)(doc), XML_DECLARATION_DETECTED );
+            TY_(Report)(doc, NULL, TY_(FindXmlDecl)(doc), XML_DECLARATION_DETECTED );
 
         }
     }
 
-#if !defined(NDEBUG) && defined(_MSC_VER)
+#if defined(ENABLE_DEBUG_LOG)
     SPRTF("All nodes AFTER clean and repair\n");
     dbg_show_all_nodes( doc, &doc->root, 0  );
 #endif
@@ -2164,10 +2061,8 @@ int         tidyDocSaveStream( TidyDocImpl* doc, StreamOut* out )
 {
     Bool showMarkup  = cfgBool( doc, TidyShowMarkup );
     Bool forceOutput = cfgBool( doc, TidyForceOutput );
-#if SUPPORT_UTF16_ENCODINGS
     Bool outputBOM   = ( cfgAutoBool(doc, TidyOutputBOM) == TidyYesState );
     Bool smartBOM    = ( cfgAutoBool(doc, TidyOutputBOM) == TidyAutoState );
-#endif
     Bool xmlOut      = cfgBool( doc, TidyXmlOut );
     Bool xhtmlOut    = cfgBool( doc, TidyXhtmlOut );
     TidyTriState bodyOnly    = cfgAutoBool( doc, TidyBodyOnly );
@@ -2207,16 +2102,13 @@ int         tidyDocSaveStream( TidyDocImpl* doc, StreamOut* out )
     else
         TY_(ReplacePreformattedSpaces)(doc, &doc->root);
 
-    if ( sortAttrStrat != TidySortAttrNone )
-        TY_(SortAttributes)(&doc->root, sortAttrStrat);
+    TY_(SortAttributes)(doc, &doc->root, sortAttrStrat);
 
     if ( showMarkup && (doc->errors == 0 || forceOutput) )
     {
-#if SUPPORT_UTF16_ENCODINGS
         /* Output a Byte Order Mark if required */
         if ( outputBOM || (doc->inputHadBOM && smartBOM) )
             TY_(outBOM)( out );
-#endif
 
         /* No longer necessary. No DOCTYPE == HTML 3.2,
         ** which gives you only the basic character entities,

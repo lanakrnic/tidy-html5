@@ -43,11 +43,6 @@ struct _Dict
     Dict*           next;
 };
 
-#if !defined(ELEMENT_HASH_LOOKUP)
-#define ELEMENT_HASH_LOOKUP 1
-#endif
-
-#if ELEMENT_HASH_LOOKUP
 enum
 {
     ELEMENT_HASH_SIZE=178u
@@ -60,15 +55,12 @@ struct _DictHash
 };
 
 typedef struct _DictHash DictHash;
-#endif
 
 struct _TidyTagImpl
 {
     Dict* xml_tags;                /* placeholder for all xml tags */
     Dict* declared_tag_list;       /* User declared tags */
-#if ELEMENT_HASH_LOOKUP
     DictHash* hashtab[ELEMENT_HASH_SIZE];
-#endif
 };
 
 typedef struct _TidyTagImpl TidyTagImpl;
@@ -125,14 +117,6 @@ Bool TY_(nodeIsText)( Node* node );
 Bool TY_(nodeIsElement)( Node* node );
 
 Bool TY_(nodeHasText)( TidyDocImpl* doc, Node* node );
-
-#if 0
-/* Compare & result to operand.  If equal, then all bits
-** requested are set.
-*/
-Bool nodeMatchCM( Node* node, uint contentModel );
-#endif
-
 
 /* True if the element looks like it's an autonomous custom element tag. */
 Bool TY_(elementIsAutonomousCustomFormat)( ctmbstr element );
