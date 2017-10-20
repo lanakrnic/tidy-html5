@@ -401,8 +401,8 @@ ctmbstr TY_(getArgFormat)( const TidyMessageImpl* message, TidyMessageArgument* 
 ctmbstr TY_(getArgValueString)( const TidyMessageImpl* message, TidyMessageArgument* arg )
 {
     int argNum = (int)(size_t)*arg;
-    assert( argNum <= message.argcount );
-    assert( message.arguments[argNum].type == tidyFormatType_STRING);
+    assert( argNum <= message->argcount );
+    assert( message->arguments[argNum].type == tidyFormatType_STRING);
     
     return message->arguments[argNum].u.s;
 }
@@ -431,7 +431,7 @@ int TY_(getArgValueInt)( const TidyMessageImpl* message, TidyMessageArgument* ar
 double TY_(getArgValueDouble)( const TidyMessageImpl* message, TidyMessageArgument* arg )
 {
     int argNum = (int)(size_t)*arg;
-    assert( argNum <= message.argcount );
+    assert( argNum <= message->argcount );
     assert( message->arguments[argNum].type == tidyFormatType_DOUBLE);
     
     return message->arguments[argNum].u.d;
