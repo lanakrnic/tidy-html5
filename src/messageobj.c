@@ -262,85 +262,85 @@ void TY_(tidyMessageRelease)( TidyMessageImpl *message )
  *********************************************************************/
 
 
-TidyDocImpl* TY_(getMessageDoc)( TidyMessageImpl message )
+TidyDocImpl* TY_(getMessageDoc)( const TidyMessageImpl* message )
 {
-    return message.tidyDoc;
+    return message->tidyDoc;
 }
 
-uint TY_(getMessageCode)( TidyMessageImpl message )
+uint TY_(getMessageCode)( const TidyMessageImpl* message )
 {
-    return message.code;
+    return message->code;
 }
 
-ctmbstr TY_(getMessageKey)( TidyMessageImpl message )
+ctmbstr TY_(getMessageKey)( const TidyMessageImpl* message )
 {
-    return message.messageKey;
+    return message->messageKey;
 }
 
-int TY_(getMessageLine)( TidyMessageImpl message )
+int TY_(getMessageLine)( const TidyMessageImpl* message )
 {
-    return message.line;
+    return message->line;
 }
 
-int TY_(getMessageColumn)( TidyMessageImpl message )
+int TY_(getMessageColumn)( const TidyMessageImpl* message )
 {
-    return message.column;
+    return message->column;
 }
 
-TidyReportLevel TY_(getMessageLevel)( TidyMessageImpl message )
+TidyReportLevel TY_(getMessageLevel)( const TidyMessageImpl* message )
 {
-    return message.level;
+    return message->level;
 }
 
-ctmbstr TY_(getMessageFormatDefault)( TidyMessageImpl message )
+ctmbstr TY_(getMessageFormatDefault)( const TidyMessageImpl* message )
 {
-    return message.messageFormatDefault;
+    return message->messageFormatDefault;
 }
 
-ctmbstr TY_(getMessageFormat)( TidyMessageImpl message )
+ctmbstr TY_(getMessageFormat)( const TidyMessageImpl* message )
 {
-    return message.messageFormat;
+    return message->messageFormat;
 }
 
-ctmbstr TY_(getMessageDefault)( TidyMessageImpl message )
+ctmbstr TY_(getMessageDefault)( const TidyMessageImpl* message )
 {
-    return message.messageDefault;
+    return message->messageDefault;
 }
 
-ctmbstr TY_(getMessage)( TidyMessageImpl message )
+ctmbstr TY_(getMessage)( const TidyMessageImpl* message )
 {
-    return message.message;
+    return message->message;
 }
 
-ctmbstr TY_(getMessagePosDefault)( TidyMessageImpl message )
+ctmbstr TY_(getMessagePosDefault)( const TidyMessageImpl* message )
 {
-    return message.messagePosDefault;
+    return message->messagePosDefault;
 }
 
-ctmbstr TY_(getMessagePos)( TidyMessageImpl message )
+ctmbstr TY_(getMessagePos)( const TidyMessageImpl* message )
 {
-    return message.messagePos;
+    return message->messagePos;
 }
 
-ctmbstr TY_(getMessagePrefixDefault)( TidyMessageImpl message )
+ctmbstr TY_(getMessagePrefixDefault)( const TidyMessageImpl* message )
 {
-    return message.messagePrefixDefault;
+    return message->messagePrefixDefault;
 }
 
-ctmbstr TY_(getMessagePrefix)( TidyMessageImpl message )
+ctmbstr TY_(getMessagePrefix)( const TidyMessageImpl* message )
 {
-    return message.messagePrefix;
+    return message->messagePrefix;
 }
 
 
-ctmbstr TY_(getMessageOutputDefault)( TidyMessageImpl message )
+ctmbstr TY_(getMessageOutputDefault)( const TidyMessageImpl* message )
 {
-    return message.messageOutputDefault;
+    return message->messageOutputDefault;
 }
 
-ctmbstr TY_(getMessageOutput)( TidyMessageImpl message )
+ctmbstr TY_(getMessageOutput)( const TidyMessageImpl* message )
 {
-    return message.messageOutput;
+    return message->messageOutput;
 }
 
 
@@ -349,15 +349,15 @@ ctmbstr TY_(getMessageOutput)( TidyMessageImpl message )
  *********************************************************************/
 
 
-TidyIterator TY_(getMessageArguments)( TidyMessageImpl message )
+TidyIterator TY_(getMessageArguments)( const TidyMessageImpl* message )
 {
-    if (message.argcount > 0)
+    if (message->argcount > 0)
         return (TidyIterator) (size_t)1;
     else
         return (TidyIterator) (size_t)0;
 }
 
-TidyMessageArgument TY_(getNextMessageArgument)( TidyMessageImpl message, TidyIterator* iter )
+TidyMessageArgument TY_(getNextMessageArgument)( const TidyMessageImpl* message, TidyIterator* iter )
 {
     size_t item = 0;
     size_t itemIndex;
@@ -365,7 +365,7 @@ TidyMessageArgument TY_(getNextMessageArgument)( TidyMessageImpl message, TidyIt
     
     itemIndex = (size_t)*iter;
     
-    if ( itemIndex >= 1 && itemIndex <= (size_t)message.argcount )
+    if ( itemIndex >= 1 && itemIndex <= (size_t)message->argcount )
     {
         item = itemIndex - 1;
         itemIndex++;
@@ -375,66 +375,66 @@ TidyMessageArgument TY_(getNextMessageArgument)( TidyMessageImpl message, TidyIt
        TidyMessageArgument is really just a dumb, zero-based index; however
        this type of iterator and opaque interrogation is simply how Tidy
        does things. */
-    *iter = (TidyIterator)( itemIndex <= (size_t)message.argcount ? itemIndex : (size_t)0 );
+    *iter = (TidyIterator)( itemIndex <= (size_t)message->argcount ? itemIndex : (size_t)0 );
     return (TidyMessageArgument)item;
 }
 
 
-TidyFormatParameterType TY_(getArgType)( TidyMessageImpl message, TidyMessageArgument* arg )
+TidyFormatParameterType TY_(getArgType)( const TidyMessageImpl* message, TidyMessageArgument* arg )
 {
     int argNum = (int)(size_t)*arg;
-    assert( argNum <= message.argcount );
+    assert( argNum <= message->argcount );
     
-    return message.arguments[argNum].type;
+    return message->arguments[argNum].type;
 }
 
 
-ctmbstr TY_(getArgFormat)( TidyMessageImpl message, TidyMessageArgument* arg )
+ctmbstr TY_(getArgFormat)( const TidyMessageImpl* message, TidyMessageArgument* arg )
 {
     int argNum = (int)(size_t)*arg;
-    assert( argNum <= message.argcount );
+    assert( argNum <= message->argcount );
     
-    return message.arguments[argNum].format;
+    return message->arguments[argNum].format;
 }
 
 
-ctmbstr TY_(getArgValueString)( TidyMessageImpl message, TidyMessageArgument* arg )
+ctmbstr TY_(getArgValueString)( const TidyMessageImpl* message, TidyMessageArgument* arg )
 {
     int argNum = (int)(size_t)*arg;
     assert( argNum <= message.argcount );
     assert( message.arguments[argNum].type == tidyFormatType_STRING);
     
-    return message.arguments[argNum].u.s;
+    return message->arguments[argNum].u.s;
 }
 
 
-uint TY_(getArgValueUInt)( TidyMessageImpl message, TidyMessageArgument* arg )
+uint TY_(getArgValueUInt)( const TidyMessageImpl* message, TidyMessageArgument* arg )
 {
     int argNum = (int)(size_t)*arg;
-    assert( argNum <= message.argcount );
-    assert( message.arguments[argNum].type == tidyFormatType_UINT);
+    assert( argNum <= message->argcount );
+    assert( message->arguments[argNum].type == tidyFormatType_UINT);
 
-    return message.arguments[argNum].u.ui;
+    return message->arguments[argNum].u.ui;
 }
 
 
-int TY_(getArgValueInt)( TidyMessageImpl message, TidyMessageArgument* arg )
+int TY_(getArgValueInt)( const TidyMessageImpl* message, TidyMessageArgument* arg )
 {
     int argNum = (int)(size_t)*arg;
-    assert( argNum <= message.argcount );
-    assert( message.arguments[argNum].type == tidyFormatType_INT);
+    assert( argNum <= message->argcount );
+    assert( message->arguments[argNum].type == tidyFormatType_INT);
 
-    return message.arguments[argNum].u.i;
+    return message->arguments[argNum].u.i;
 }
 
 
-double TY_(getArgValueDouble)( TidyMessageImpl message, TidyMessageArgument* arg )
+double TY_(getArgValueDouble)( const TidyMessageImpl* message, TidyMessageArgument* arg )
 {
     int argNum = (int)(size_t)*arg;
     assert( argNum <= message.argcount );
-    assert( message.arguments[argNum].type == tidyFormatType_DOUBLE);
+    assert( message->arguments[argNum].type == tidyFormatType_DOUBLE);
     
-    return message.arguments[argNum].u.d;
+    return message->arguments[argNum].u.d;
 }
 
 

@@ -63,52 +63,52 @@ void TY_(tidyMessageRelease)( TidyMessageImpl *message );
 
 
 /** get the document the message came from. */
-TidyDocImpl* TY_(getMessageDoc)( TidyMessageImpl message );
+TidyDocImpl* TY_(getMessageDoc)( const TidyMessageImpl* message );
 
 /** get the message key code. */
-uint TY_(getMessageCode)( TidyMessageImpl message );
+uint TY_(getMessageCode)( const TidyMessageImpl* message );
 
 /** get the message key string. */
-ctmbstr TY_(getMessageKey)( TidyMessageImpl message );
+ctmbstr TY_(getMessageKey)( const TidyMessageImpl* message );
 
 /** get the line number the message applies to. */
-int TY_(getMessageLine)( TidyMessageImpl message );
+int TY_(getMessageLine)( const TidyMessageImpl* message );
 
 /** get the column the message applies to. */
-int TY_(getMessageColumn)( TidyMessageImpl message );
+int TY_(getMessageColumn)( const TidyMessageImpl* message );
 
 /** get the TidyReportLevel of the message. */
-TidyReportLevel TY_(getMessageLevel)( TidyMessageImpl message );
+TidyReportLevel TY_(getMessageLevel)( const TidyMessageImpl* message );
 
 /** the built-in format string */
-ctmbstr TY_(getMessageFormatDefault)( TidyMessageImpl message );
+ctmbstr TY_(getMessageFormatDefault)( const TidyMessageImpl* message );
 
 /** the localized format string */
-ctmbstr TY_(getMessageFormat)( TidyMessageImpl message );
+ctmbstr TY_(getMessageFormat)( const TidyMessageImpl* message );
 
 /** the message, formatted, default language */
-ctmbstr TY_(getMessageDefault)( TidyMessageImpl message );
+ctmbstr TY_(getMessageDefault)( const TidyMessageImpl* message );
 
 /** the message, formatted, localized */
-ctmbstr TY_(getMessage)( TidyMessageImpl message );
+ctmbstr TY_(getMessage)( const TidyMessageImpl* message );
 
 /** the position part, default language */
-ctmbstr TY_(getMessagePosDefault)( TidyMessageImpl message );
+ctmbstr TY_(getMessagePosDefault)( const TidyMessageImpl* message );
 
 /** the position part, localized */
-ctmbstr TY_(getMessagePos)( TidyMessageImpl message );
+ctmbstr TY_(getMessagePos)( const TidyMessageImpl* message );
 
 /** the prefix part, default language */
-ctmbstr TY_(getMessagePrefixDefault)( TidyMessageImpl message );
+ctmbstr TY_(getMessagePrefixDefault)( const TidyMessageImpl* message );
 
 /** the prefix part, localized */
-ctmbstr TY_(getMessagePrefix)( TidyMessageImpl message );
+ctmbstr TY_(getMessagePrefix)( const TidyMessageImpl* message );
 
 /** the complete message, as would be output in the CLI */
-ctmbstr TY_(getMessageOutputDefault)( TidyMessageImpl message );
+ctmbstr TY_(getMessageOutputDefault)( const TidyMessageImpl* message );
 
 /* the complete message, as would be output in the CLI, localized */
-ctmbstr TY_(getMessageOutput)( TidyMessageImpl message );
+ctmbstr TY_(getMessageOutput)( const TidyMessageImpl* message );
 
 
 /** @} end messageobj_message_api group */
@@ -120,19 +120,19 @@ ctmbstr TY_(getMessageOutput)( TidyMessageImpl message );
  *  argument. Use `TY_(getNextMEssageArgument)` to get an opaque instance of
  *  `TidyMessageArgument` for which the subsequent interrogators will be of use.
  */
-TidyIterator TY_(getMessageArguments)( TidyMessageImpl message );
+TidyIterator TY_(getMessageArguments)( const TidyMessageImpl* message );
 
 /**
  *  Returns the next `TidyMessageArgument`, for the given message, which can
  *  then be interrogated with the API, and advances the iterator.
  */
-TidyMessageArgument TY_(getNextMessageArgument)( TidyMessageImpl message, TidyIterator* iter );
+TidyMessageArgument TY_(getNextMessageArgument)( const TidyMessageImpl* message, TidyIterator* iter );
 
 
 /**
  *  Returns the `TidyFormatParameterType` of the given message argument.
  */
-TidyFormatParameterType TY_(getArgType)( TidyMessageImpl message, TidyMessageArgument* arg );
+TidyFormatParameterType TY_(getArgType)( const TidyMessageImpl* message, TidyMessageArgument* arg );
 
 
 /**
@@ -140,14 +140,14 @@ TidyFormatParameterType TY_(getArgType)( TidyMessageImpl message, TidyMessageArg
  *  this string is cleared upon termination of the callback, so do be sure to
  *  make your own copy.
  */
-ctmbstr TY_(getArgFormat)( TidyMessageImpl message, TidyMessageArgument* arg );
+ctmbstr TY_(getArgFormat)( const TidyMessageImpl* message, TidyMessageArgument* arg );
 
 
 /**
  *  Returns the string value of the given message argument. An assertion
  *  will be generated if the argument type is not a string.
  */
-ctmbstr TY_(getArgValueString)( TidyMessageImpl message, TidyMessageArgument* arg );
+ctmbstr TY_(getArgValueString)( const TidyMessageImpl* message, TidyMessageArgument* arg );
 
 
 /**
@@ -155,21 +155,21 @@ ctmbstr TY_(getArgValueString)( TidyMessageImpl message, TidyMessageArgument* ar
  *  assertion will be generated if the argument type is not an unsigned
  *  integer.
  */
-uint TY_(getArgValueUInt)( TidyMessageImpl message, TidyMessageArgument* arg );
+uint TY_(getArgValueUInt)( const TidyMessageImpl* message, TidyMessageArgument* arg );
 
 
 /**
  *  Returns the integer value of the given message argument. An assertion
  *  will be generated if the argument type is not an integer.
  */
-int TY_(getArgValueInt)( TidyMessageImpl message, TidyMessageArgument* arg );
+int TY_(getArgValueInt)( const TidyMessageImpl* message, TidyMessageArgument* arg );
 
 
 /**
  *  Returns the double value of the given message argument. An assertion
  *  will be generated if the argument type is not a double.
  */
-double TY_(getArgValueDouble)( TidyMessageImpl message, TidyMessageArgument* arg );
+double TY_(getArgValueDouble)( const TidyMessageImpl* message, TidyMessageArgument* arg );
 
 
 /** @} end messageobj_args_api group */

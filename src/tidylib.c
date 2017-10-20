@@ -680,38 +680,38 @@ Bool TIDY_CALL tidySetMessageCallback( TidyDoc tdoc, TidyMessageCallback filt )
 TidyDoc TIDY_CALL tidyGetMessageDoc( TidyMessage tmessage )
 {
     TidyMessageImpl *message = tidyMessageToImpl(tmessage);
-    TidyDocImpl* doc = TY_(getMessageDoc)(*message);
+    TidyDocImpl* doc = TY_(getMessageDoc)(message);
     return tidyImplToDoc(doc);
 }
 
 uint TIDY_CALL tidyGetMessageCode( TidyMessage tmessage )
 {
     TidyMessageImpl *message = tidyMessageToImpl(tmessage);
-    return TY_(getMessageCode)(*message);
+    return TY_(getMessageCode)(message);
 }
 
 ctmbstr TIDY_CALL tidyGetMessageKey( TidyMessage tmessage )
 {
     TidyMessageImpl *message = tidyMessageToImpl(tmessage);
-    return TY_(getMessageKey)(*message);
+    return TY_(getMessageKey)(message);
 }
 
 int TIDY_CALL tidyGetMessageLine( TidyMessage tmessage )
 {
     TidyMessageImpl *message = tidyMessageToImpl(tmessage);
-    return TY_(getMessageLine)(*message);
+    return TY_(getMessageLine)(message);
 }
 
 int TIDY_CALL tidyGetMessageColumn( TidyMessage tmessage )
 {
     TidyMessageImpl *message = tidyMessageToImpl(tmessage);
-    return TY_(getMessageColumn)(*message);
+    return TY_(getMessageColumn)(message);
 }
 
 TidyReportLevel TIDY_CALL tidyGetMessageLevel( TidyMessage tmessage )
 {
     TidyMessageImpl *message = tidyMessageToImpl(tmessage);
-    return TY_(getMessageLevel)(*message);
+    return TY_(getMessageLevel)(message);
 }
 
 
@@ -719,110 +719,110 @@ TidyReportLevel TIDY_CALL tidyGetMessageLevel( TidyMessage tmessage )
 ctmbstr TIDY_CALL tidyGetMessageFormatDefault( TidyMessage tmessage )
 {
     TidyMessageImpl *message = tidyMessageToImpl(tmessage);
-    return TY_(getMessageFormatDefault)(*message);
+    return TY_(getMessageFormatDefault)(message);
 }
 
 ctmbstr TIDY_CALL tidyGetMessageFormat( TidyMessage tmessage )
 {
     TidyMessageImpl *message = tidyMessageToImpl(tmessage);
-    return TY_(getMessageFormat)(*message);
+    return TY_(getMessageFormat)(message);
 }
 
 ctmbstr TIDY_CALL tidyGetMessageDefault( TidyMessage tmessage )
 {
     TidyMessageImpl *message = tidyMessageToImpl(tmessage);
-    return TY_(getMessageDefault)(*message);
+    return TY_(getMessageDefault)(message);
 }
 
 ctmbstr TIDY_CALL tidyGetMessage( TidyMessage tmessage )
 {
     TidyMessageImpl *message = tidyMessageToImpl(tmessage);
-    return TY_(getMessage)(*message);
+    return TY_(getMessage)(message);
 }
 
 ctmbstr TIDY_CALL tidyGetMessagePosDefault( TidyMessage tmessage )
 {
     TidyMessageImpl *message = tidyMessageToImpl(tmessage);
-    return TY_(getMessagePosDefault)(*message);
+    return TY_(getMessagePosDefault)(message);
 }
 
 ctmbstr TIDY_CALL tidyGetMessagePos( TidyMessage tmessage )
 {
     TidyMessageImpl *message = tidyMessageToImpl(tmessage);
-    return TY_(getMessagePos)(*message);
+    return TY_(getMessagePos)(message);
 }
 
 ctmbstr TIDY_CALL tidyGetMessagePrefixDefault( TidyMessage tmessage )
 {
     TidyMessageImpl *message = tidyMessageToImpl(tmessage);
-    return TY_(getMessagePrefixDefault)(*message);
+    return TY_(getMessagePrefixDefault)(message);
 }
 
 ctmbstr TIDY_CALL tidyGetMessagePrefix( TidyMessage tmessage )
 {
     TidyMessageImpl *message = tidyMessageToImpl(tmessage);
-    return TY_(getMessagePrefix)(*message);
+    return TY_(getMessagePrefix)(message);
 }
 
 
 ctmbstr TIDY_CALL tidyGetMessageOutputDefault( TidyMessage tmessage )
 {
     TidyMessageImpl *message = tidyMessageToImpl(tmessage);
-    return TY_(getMessageOutputDefault)(*message);
+    return TY_(getMessageOutputDefault)(message);
 }
 
 ctmbstr TIDY_CALL tidyGetMessageOutput( TidyMessage tmessage )
 {
     TidyMessageImpl *message = tidyMessageToImpl(tmessage);
-    return TY_(getMessageOutput)(*message);
+    return TY_(getMessageOutput)(message);
 }
 
 TidyIterator TIDY_CALL tidyGetMessageArguments( TidyMessage tmessage )
 {
     TidyMessageImpl *message = tidyMessageToImpl(tmessage);
-    return TY_(getMessageArguments)(*message);
+    return TY_(getMessageArguments)(message);
 }
 
 TidyMessageArgument TIDY_CALL tidyGetNextMessageArgument( TidyMessage tmessage, TidyIterator* iter )
 {
     TidyMessageImpl *message = tidyMessageToImpl(tmessage);
-    return TY_(getNextMessageArgument)(*message, iter);
+    return TY_(getNextMessageArgument)(message, iter);
 }
 
 TidyFormatParameterType TIDY_CALL tidyGetArgType( TidyMessage tmessage, TidyMessageArgument* arg )
 {
     TidyMessageImpl *message = tidyMessageToImpl(tmessage);
-    return TY_(getArgType)(*message, arg);
+    return TY_(getArgType)(message, arg);
 }
 
 ctmbstr TIDY_CALL tidyGetArgFormat( TidyMessage tmessage, TidyMessageArgument* arg )
 {
     TidyMessageImpl *message = tidyMessageToImpl(tmessage);
-    return TY_(getArgFormat)(*message, arg);
+    return TY_(getArgFormat)(message, arg);
 }
 
 ctmbstr TIDY_CALL tidyGetArgValueString( TidyMessage tmessage, TidyMessageArgument* arg )
 {
     TidyMessageImpl *message = tidyMessageToImpl(tmessage);
-    return TY_(getArgValueString)(*message, arg);
+    return TY_(getArgValueString)(message, arg);
 }
 
 uint TIDY_CALL tidyGetArgValueUInt( TidyMessage tmessage, TidyMessageArgument* arg )
 {
     TidyMessageImpl *message = tidyMessageToImpl(tmessage);
-    return TY_(getArgValueUInt)(*message, arg);
+    return TY_(getArgValueUInt)(message, arg);
 }
 
 int TIDY_CALL tidyGetArgValueInt( TidyMessage tmessage, TidyMessageArgument* arg )
 {
     TidyMessageImpl *message = tidyMessageToImpl(tmessage);
-    return TY_(getArgValueInt)(*message, arg);
+    return TY_(getArgValueInt)(message, arg);
 }
 
 double TIDY_CALL tidyGetArgValueDouble( TidyMessage tmessage, TidyMessageArgument* arg )
 {
     TidyMessageImpl *message = tidyMessageToImpl(tmessage);
-    return TY_(getArgValueDouble)(*message, arg);
+    return TY_(getArgValueDouble)(message, arg);
 }
 
 
