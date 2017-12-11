@@ -2212,7 +2212,7 @@ Bool TY_(TidyMetaCharset)(TidyDocImpl* doc)
     tidyBufAppend(&charsetString, (char*)enc, TY_(tmbstrlen)(enc));
     tidyBufAppend(&charsetString, "\0", 1); /* zero terminate the buffer */
                                             /* process the children of the head */
-    for (currentNode = head->content; currentNode; currentNode = currentNode->next)
+    for (currentNode = head->content; currentNode; currentNode = (currentNode ? currentNode->next : NULL))
     {
         if (!nodeIsMETA(currentNode))
             continue;   /* not a meta node */
